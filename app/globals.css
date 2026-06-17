@@ -1,0 +1,358 @@
+:root {
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --text: #111827;
+  --muted: #667085;
+  --line: #d6dde6;
+  --primary: #155eef;
+  --primary-dark: #0f45b5;
+  --success: #1f8a5b;
+  --sidebar: #152033;
+  --sidebar-soft: #253247;
+  --shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Arial, "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  height: 100vh;
+  flex-direction: column;
+  gap: 10px;
+  padding: 22px 16px;
+  background: var(--sidebar);
+  color: #e5edf7;
+}
+
+.sidebar strong {
+  color: #fff;
+  font-size: 18px;
+}
+
+.sidebar span {
+  color: #a9b7c8;
+  font-size: 12px;
+}
+
+.sidebar nav {
+  display: grid;
+  gap: 6px;
+  margin-top: 18px;
+}
+
+.sidebar a {
+  min-height: 42px;
+  border-radius: 8px;
+  padding: 11px 12px;
+  color: #d9e2ee;
+  font-weight: 700;
+}
+
+.sidebar a:hover {
+  background: var(--sidebar-soft);
+}
+
+.main {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  max-width: 1280px;
+  padding: 28px;
+}
+
+.page-header,
+.panel-head,
+.actions,
+.header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.page-header h1,
+.panel h2,
+.bank-group h2 {
+  margin: 0;
+}
+
+.page-header p,
+.panel-head span,
+.deposit-card span {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.panel,
+.subpanel,
+.deposit-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.slim-panel {
+  max-width: 920px;
+}
+
+.panel-head {
+  padding: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 16px;
+}
+
+.form-grid.compact {
+  padding: 0;
+}
+
+.full {
+  grid-column: 1 / -1;
+}
+
+label,
+.memo {
+  display: grid;
+  gap: 8px;
+  color: #2f3b48;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fff;
+  color: var(--text);
+}
+
+textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.subpanel {
+  display: grid;
+  gap: 12px;
+  margin: 0 16px 16px;
+  padding: 14px;
+  background: #f8fafc;
+  box-shadow: none;
+}
+
+.allocation-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 10px;
+}
+
+.memo {
+  padding: 0 16px 16px;
+}
+
+.actions {
+  justify-content: flex-end;
+  padding: 0 16px 16px;
+}
+
+.primary,
+.secondary {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.primary {
+  border: 0;
+  background: var(--primary);
+  color: #fff;
+}
+
+.primary:hover {
+  background: var(--primary-dark);
+}
+
+.secondary {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--text);
+}
+
+.secondary.small {
+  min-height: 34px;
+  padding: 6px 10px;
+}
+
+.secondary:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.mode-badge {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fff;
+  color: #324255;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.finance-list {
+  display: grid;
+  gap: 18px;
+  padding: 16px;
+}
+
+.bank-group {
+  display: grid;
+  gap: 10px;
+}
+
+.bank-group h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+caption {
+  padding: 8px 0;
+  color: #324255;
+  font-weight: 700;
+  text-align: left;
+}
+
+th,
+td {
+  padding: 11px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  background: #f1f5f9;
+  color: #324255;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.deposit-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.deposit-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+}
+
+.deposit-card svg {
+  color: var(--primary);
+}
+
+.deposit-card b {
+  font-size: 22px;
+}
+
+.history-section + .history-section {
+  margin-top: 18px;
+}
+
+.status {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: #fff4d6;
+  color: #7b520b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.status.paid {
+  background: #dff4ea;
+  color: var(--success);
+}
+
+@media (max-width: 920px) {
+  .app-shell,
+  .form-grid,
+  .allocation-row,
+  .deposit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: static;
+    height: auto;
+  }
+
+  .sidebar nav {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
