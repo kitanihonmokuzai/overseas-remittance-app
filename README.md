@@ -1,56 +1,66 @@
 # Overseas Remittance App
 
-Neon Postgresを使った海外送金申請Webアプリです。
+グループ会社からの海外送金申請、為替予約、外貨預金残高、履歴を管理するNext.js + Supabaseアプリです。
 
 ## Features
 
+- メールアドレスとパスワードでログイン
 - 送金申請フォーム
-- 受取人マスタからの自動入力
-- 為替予約の一覧・登録
-- 外貨預金残高の一覧・入金登録
-- 申請、為替予約登録、外貨預金入金の履歴表示
-- 支払済登録時の為替予約使用額・外貨預金残高更新
+- 受取人マスタからの自動入力と手動修正
+- PDF添付ファイルの複数アップロード
+- 為替予約の銀行別、通貨別一覧
+- 外貨預金口座の残高一覧
+- 申請、為替予約登録、外貨預金入金の履歴一覧
+- 支払済登録時の為替予約使用額、外貨預金残高更新
 
 ## Tech Stack
 
 - Next.js App Router
 - React
 - TypeScript
-- Neon Postgres
-- `@neondatabase/serverless`
+- Supabase Auth
+- Supabase Database
+- Supabase Storage
 
-## Setup
+## Local Setup
 
 ```bash
 npm install
 ```
 
-Create `.env.local`.
+`.env.local` を作成します。
 
 ```env
-DATABASE_URL="postgresql://USER:PASSWORD@HOST/neondb?sslmode=require&channel_binding=require"
+NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="your-publishable-or-anon-key"
 ```
 
-Apply database schema.
+Supabase DashboardのSQL Editorで `supabase/schema.sql` を実行します。
 
-```bash
-node scripts/apply-schema.mjs
-```
-
-Run locally.
+その後、開発サーバーを起動します。
 
 ```bash
 npm run dev
 ```
 
-Open:
+ブラウザで開きます。
 
 ```text
-http://localhost:3000/transfer-request
+http://localhost:3000/login
 ```
+
+## Supabase Setup
+
+1. Supabase Dashboardでプロジェクトを開きます。
+2. SQL Editorを開きます。
+3. `supabase/schema.sql` の内容を貼り付けて実行します。
+4. Authentication > Providers > Email を確認し、Emailログインを有効にします。
+5. Authentication > URL Configuration で、本番URLを使う場合はSite URLとRedirect URLsを設定します。
+6. Storageに `remittance-files` バケットが作られていることを確認します。
 
 ## Pages
 
+- `/login`
 - `/transfer-request`
 - `/fx-reservations`
 - `/fx-reservations/new`
@@ -60,10 +70,13 @@ http://localhost:3000/transfer-request
 
 ## Deployment Notes
 
-This app requires a server runtime because it uses Next.js Server Actions and Neon Postgres. GitHub Pages is not suitable for this app as-is. Use Vercel, Render, Railway, or another Node.js-capable hosting service connected to the GitHub repository.
+このアプリはNext.js Server Actionsを使うため、GitHub PagesではなくVercelなどのNode.js対応ホスティングにデプロイしてください。
 
-Set `DATABASE_URL` as a secret environment variable in the hosting service. Do not commit `.env.local`.
+Vercelには以下の環境変数を設定します。
 
-## File Uploads
+```env
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+```
 
-PDF file body storage is intentionally not implemented yet. The current app stores file-name metadata only. Use S3, Cloudflare R2, Vercel Blob, or another object storage service for PDF bodies, and store the object key in `remittance_files.storage_key`.
+`.env.local` はGitHubへコミットしないでください。

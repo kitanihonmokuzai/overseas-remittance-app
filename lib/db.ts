@@ -1,11 +1,3 @@
-import { neon } from "@neondatabase/serverless";
-
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL is not set.");
-}
-
-export const sql = neon(process.env.DATABASE_URL);
-
 export type Payee = {
   id: string;
   name: string;
@@ -25,9 +17,9 @@ export type FxReservation = {
   currency: string;
   bank: string;
   booked_date: string;
-  original_amount: string;
-  used_amount: string;
-  rate: string;
+  original_amount: string | number;
+  used_amount: string | number;
+  rate: string | number;
   period: string;
 };
 
@@ -35,7 +27,7 @@ export type ForeignDepositAccount = {
   id: string;
   bank: string;
   currency: string;
-  balance: string;
+  balance: string | number;
   account_name: string;
 };
 
@@ -43,13 +35,13 @@ export type RemittanceRequest = {
   id: string;
   remittance_date: string;
   payee_name: string;
-  amount: string;
+  amount: string | number;
   currency: string;
   settlement_method: "スポット" | "為替予約" | "外貨預金";
   memo: string;
   status: "下書き" | "申請中" | "支払済";
   created_at: string;
-  file_count: string;
+  file_count: number;
 };
 
 export type FxRegistrationHistory = {
@@ -57,8 +49,8 @@ export type FxRegistrationHistory = {
   reservation_no: string;
   bank: string;
   currency: string;
-  amount: string;
-  rate: string;
+  amount: string | number;
+  rate: string | number;
   created_at: string;
 };
 
@@ -66,7 +58,7 @@ export type DepositTransaction = {
   id: string;
   bank: string;
   currency: string;
-  amount: string;
+  amount: string | number;
   memo: string;
   created_at: string;
 };

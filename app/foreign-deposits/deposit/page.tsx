@@ -15,7 +15,7 @@ export default async function DepositTransactionPage() {
       <form action={createDepositTransaction} className="panel slim-panel">
         <div className="form-grid">
           <label>
-            入金先口座
+            入金口座
             <select name="deposit_id">
               {deposits.map((deposit) => (
                 <option key={deposit.id} value={deposit.id}>

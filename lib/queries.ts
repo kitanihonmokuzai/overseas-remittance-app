@@ -1,47 +1,91 @@
-import { sql, type DepositTransaction, type ForeignDepositAccount, type FxRegistrationHistory, type FxReservation, type Payee, type RemittanceRequest } from "@/lib/db";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import type {
+  DepositTransaction,
+  ForeignDepositAccount,
+  FxRegistrationHistory,
+  FxReservation,
+  Payee,
+  RemittanceRequest
+} from "@/lib/db";
+
+async function authenticatedClient() {
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.getUser();
+
+  if (error || !data.user) {
+    redirect("/login");
+  }
+
+  return supabase;
+}
+
+function throwIfError(error: { message: string } | null) {
+  if (error) {
+    throw new Error(error.message);
+  }
+}
 
 export async function getPayees() {
-  const rows = await sql`select * from payees order by name`;
-  return rows as Payee[];
+  const supabase = await authenticatedClient();
+  const { data, error } = await supabase.from("payees").select("*").order("name");
+  throwIfError(error);
+  return (data ?? []) as Payee[];
 }
 
 export async function getFxReservations() {
-  const rows = await sql`select * from fx_reservations order by bank, currency, reservation_no`;
-  return rows as FxReservation[];
+  const supabase = await authenticatedClient();
+  const { data, error } = await supabase
+    .from("fx_reservations")
+    .select("*")
+    .order("bank")
+    .order("currency")
+    .order("reservation_no");
+  throwIfError(error);
+  return (data ?? []) as FxReservation[];
 }
 
 export async function getForeignDeposits() {
-  const rows = await sql`select * from foreign_deposit_accounts order by bank, currency`;
-  return rows as ForeignDepositAccount[];
+  const supabase = await authenticatedClient();
+  const { data, error } = await supabase
+    .from("foreign_deposit_accounts")
+    .select("*")
+    .order("bank")
+    .order("currency");
+  throwIfError(error);
+  return (data ?? []) as ForeignDepositAccount[];
 }
 
 export async function getRemittanceRequests() {
-  const rows = await sql`
-    select
-      r.id,
-      r.remittance_date,
-      r.payee_name,
-      r.amount,
-      r.currency,
-      r.settlement_method,
-      r.memo,
-      r.status,
-      r.created_at,
-      count(f.id)::text as file_count
-    from remittance_requests r
-    left join remittance_files f on f.request_id = r.id
-    group by r.id
-    order by r.created_at desc
-  `;
-  return rows as RemittanceRequest[];
+  const supabase = await authenticatedClient();
+  const { data, error } = await supabase
+    .from("remittance_requests")
+    .select("id, remittance_date, payee_name, amount, currency, settlement_method, memo, status, created_at, remittance_files(id)")
+    .order("created_at", { ascending: false });
+  throwIfError(error);
+
+  return (data ?? []).map((request) => ({
+    ...request,
+    file_count: Array.isArray(request.remittance_files) ? request.remittance_files.length : 0
+  })) as RemittanceRequest[];
 }
 
 export async function getFxRegistrationHistory() {
-  const rows = await sql`select * from fx_registration_history order by created_at desc`;
-  return rows as FxRegistrationHistory[];
+  const supabase = await authenticatedClient();
+  const { data, error } = await supabase
+    .from("fx_registration_history")
+    .select("*")
+    .order("created_at", { ascending: false });
+  throwIfError(error);
+  return (data ?? []) as FxRegistrationHistory[];
 }
 
 export async function getDepositTransactions() {
-  const rows = await sql`select * from foreign_deposit_transactions order by created_at desc`;
-  return rows as DepositTransaction[];
+  const supabase = await authenticatedClient();
+  const { data, error } = await supabase
+    .from("foreign_deposit_transactions")
+    .select("*")
+    .order("created_at", { ascending: false });
+  throwIfError(error);
+  return (data ?? []) as DepositTransaction[];
 }

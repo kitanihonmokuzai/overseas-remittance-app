@@ -6,6 +6,28 @@ import { createRemittanceRequest } from "@/lib/actions";
 import type { ForeignDepositAccount, FxReservation, Payee } from "@/lib/db";
 import { formatAmount, remaining } from "@/lib/db";
 
+type Beneficiary = {
+  bank_name: string;
+  branch_name: string;
+  account_no: string;
+  account_name: string;
+  swift: string;
+  country: string;
+  address: string;
+};
+
+function beneficiaryFromPayee(payee?: Payee): Beneficiary {
+  return {
+    bank_name: payee?.bank_name ?? "",
+    branch_name: payee?.branch_name ?? "",
+    account_no: payee?.account_no ?? "",
+    account_name: payee?.account_name ?? "",
+    swift: payee?.swift ?? "",
+    country: payee?.country ?? "",
+    address: payee?.address ?? ""
+  };
+}
+
 export function RequestForm({
   deposits,
   payees,
@@ -18,17 +40,23 @@ export function RequestForm({
   const [payeeId, setPayeeId] = useState(payees[0]?.id ?? "");
   const [currency, setCurrency] = useState(payees[0]?.default_currency ?? "EUR");
   const [settlementMethod, setSettlementMethod] = useState("為替予約");
-
   const payee = useMemo(() => payees.find((item) => item.id === payeeId) ?? payees[0], [payeeId, payees]);
+  const [beneficiary, setBeneficiary] = useState<Beneficiary>(beneficiaryFromPayee(payee));
+
   const filteredReservations = reservations.filter((reservation) => reservation.currency === currency);
   const filteredDeposits = deposits.filter((deposit) => deposit.currency === currency);
 
   function changePayee(nextId: string) {
     const nextPayee = payees.find((item) => item.id === nextId);
     setPayeeId(nextId);
+    setBeneficiary(beneficiaryFromPayee(nextPayee));
     if (nextPayee) {
       setCurrency(nextPayee.default_currency);
     }
+  }
+
+  function updateBeneficiary(key: keyof Beneficiary, value: string) {
+    setBeneficiary((current) => ({ ...current, [key]: value }));
   }
 
   return (
@@ -98,17 +126,17 @@ export function RequestForm({
       <div className="subpanel">
         <strong>受取人情報</strong>
         <div className="form-grid compact">
-          <label>銀行名<input name="bank_name" value={payee?.bank_name ?? ""} readOnly /></label>
-          <label>支店名<input name="branch_name" defaultValue={payee?.branch_name ?? ""} /></label>
-          <label>口座番号<input name="account_no" defaultValue={payee?.account_no ?? ""} /></label>
-          <label>口座名義<input name="account_name" defaultValue={payee?.account_name ?? ""} /></label>
-          <label>SWIFT<input name="swift" defaultValue={payee?.swift ?? ""} /></label>
-          <label>国<input name="country" defaultValue={payee?.country ?? ""} /></label>
-          <label className="full">住所<input name="address" defaultValue={payee?.address ?? ""} /></label>
+          <label>銀行名<input name="bank_name" onChange={(event) => updateBeneficiary("bank_name", event.target.value)} value={beneficiary.bank_name} /></label>
+          <label>支店名<input name="branch_name" onChange={(event) => updateBeneficiary("branch_name", event.target.value)} value={beneficiary.branch_name} /></label>
+          <label>口座番号<input name="account_no" onChange={(event) => updateBeneficiary("account_no", event.target.value)} value={beneficiary.account_no} /></label>
+          <label>口座名義<input name="account_name" onChange={(event) => updateBeneficiary("account_name", event.target.value)} value={beneficiary.account_name} /></label>
+          <label>SWIFT<input name="swift" onChange={(event) => updateBeneficiary("swift", event.target.value)} value={beneficiary.swift} /></label>
+          <label>国<input name="country" onChange={(event) => updateBeneficiary("country", event.target.value)} value={beneficiary.country} /></label>
+          <label className="full">住所<input name="address" onChange={(event) => updateBeneficiary("address", event.target.value)} value={beneficiary.address} /></label>
         </div>
       </div>
 
-      <label className="memo">添付PDF名<textarea name="file_names" placeholder="PDFファイル名を1行ずつ入力。ファイル本体の保存先は次段階でS3/R2等に接続します。" /></label>
+      <label className="memo">添付PDF<input accept="application/pdf" multiple name="attachments" type="file" /></label>
       <label className="memo">備考<textarea name="memo" /></label>
 
       <div className="actions">

@@ -1,8 +1,10 @@
 "use server";
 
+import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { sql, toNumber } from "@/lib/db";
+import { createClient } from "@/lib/supabase/server";
+import { toNumber } from "@/lib/db";
 
 function value(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -12,7 +14,57 @@ function numberValue(formData: FormData, key: string) {
   return Number(value(formData, key) || 0);
 }
 
+async function authenticatedClient() {
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.getUser();
+
+  if (error || !data.user) {
+    redirect("/login");
+  }
+
+  return { supabase, user: data.user };
+}
+
+function throwIfError(error: { message: string } | null) {
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function signIn(formData: FormData) {
+  const email = value(formData, "email");
+  const password = value(formData, "password");
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  redirect("/transfer-request");
+}
+
+export async function signUp(formData: FormData) {
+  const email = value(formData, "email");
+  const password = value(formData, "password");
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signUp({ email, password });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  redirect("/transfer-request");
+}
+
+export async function signOut() {
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  redirect("/login");
+}
+
 export async function createRemittanceRequest(formData: FormData) {
+  const { supabase, user } = await authenticatedClient();
   const remittanceDate = value(formData, "remittance_date");
   const payeeId = value(formData, "payee_id");
   const payeeName = value(formData, "payee_name");
@@ -23,10 +75,6 @@ export async function createRemittanceRequest(formData: FormData) {
   const foreignDepositId = value(formData, "foreign_deposit_id");
   const fxReservationId = value(formData, "fx_reservation_id");
   const fxAmount = numberValue(formData, "fx_amount");
-  const fileNames = value(formData, "file_names")
-    .split(/\r?\n/)
-    .map((item) => item.trim())
-    .filter(Boolean);
 
   if (!remittanceDate || !payeeName || amount <= 0 || !currency || !settlementMethod) {
     throw new Error("必須項目が不足しています。");
@@ -42,48 +90,57 @@ export async function createRemittanceRequest(formData: FormData) {
     address: value(formData, "address")
   };
 
-  const rows = await sql`
-    insert into remittance_requests (
-      remittance_date,
-      payee_id,
-      payee_name,
+  const { data: request, error: requestError } = await supabase
+    .from("remittance_requests")
+    .insert({
+      remittance_date: remittanceDate,
+      payee_id: payeeId || null,
+      payee_name: payeeName,
       amount,
       currency,
-      settlement_method,
-      foreign_deposit_id,
+      settlement_method: settlementMethod,
+      foreign_deposit_id: foreignDepositId || null,
       memo,
       beneficiary,
-      status
-    )
-    values (
-      ${remittanceDate},
-      ${payeeId || null},
-      ${payeeName},
-      ${amount},
-      ${currency},
-      ${settlementMethod},
-      ${foreignDepositId || null},
-      ${memo},
-      ${JSON.stringify(beneficiary)}::jsonb,
-      '申請中'
-    )
-    returning id
-  `;
-
-  const requestId = rows[0].id as string;
-
-  if (settlementMethod === "為替予約" && fxReservationId && fxAmount > 0) {
-    await sql`
-      insert into remittance_fx_allocations (request_id, reservation_id, amount)
-      values (${requestId}, ${fxReservationId}, ${fxAmount})
-    `;
+      status: "申請中",
+      created_by: user.id
+    })
+    .select("id")
+    .single();
+  throwIfError(requestError);
+  if (!request) {
+    throw new Error("申請の登録に失敗しました。");
   }
 
-  for (const fileName of fileNames) {
-    await sql`
-      insert into remittance_files (request_id, file_name)
-      values (${requestId}, ${fileName})
-    `;
+  const requestId = request.id as string;
+
+  if (settlementMethod === "為替予約" && fxReservationId && fxAmount > 0) {
+    const { error } = await supabase.from("remittance_fx_allocations").insert({
+      request_id: requestId,
+      reservation_id: fxReservationId,
+      amount: fxAmount
+    });
+    throwIfError(error);
+  }
+
+  const files = formData
+    .getAll("attachments")
+    .filter((item): item is File => item instanceof File && item.size > 0);
+
+  for (const file of files) {
+    const storagePath = `${user.id}/${requestId}/${randomUUID()}-${file.name}`;
+    const { error: uploadError } = await supabase.storage.from("remittance-files").upload(storagePath, file, {
+      contentType: file.type || "application/pdf",
+      upsert: false
+    });
+    throwIfError(uploadError);
+
+    const { error: fileError } = await supabase.from("remittance_files").insert({
+      request_id: requestId,
+      file_name: file.name,
+      storage_path: storagePath
+    });
+    throwIfError(fileError);
   }
 
   revalidatePath("/history");
@@ -91,6 +148,7 @@ export async function createRemittanceRequest(formData: FormData) {
 }
 
 export async function createFxReservation(formData: FormData) {
+  const { supabase } = await authenticatedClient();
   const reservationNo = value(formData, "reservation_no");
   const bank = value(formData, "bank");
   const currency = value(formData, "currency");
@@ -103,16 +161,34 @@ export async function createFxReservation(formData: FormData) {
     throw new Error("必須項目が不足しています。");
   }
 
-  const rows = await sql`
-    insert into fx_reservations (reservation_no, bank, currency, booked_date, original_amount, used_amount, rate, period)
-    values (${reservationNo}, ${bank}, ${currency}, ${bookedDate}, ${originalAmount}, 0, ${rate}, ${period})
-    returning id
-  `;
+  const { data: reservation, error } = await supabase
+    .from("fx_reservations")
+    .insert({
+      reservation_no: reservationNo,
+      bank,
+      currency,
+      booked_date: bookedDate,
+      original_amount: originalAmount,
+      used_amount: 0,
+      rate,
+      period
+    })
+    .select("id")
+    .single();
+  throwIfError(error);
+  if (!reservation) {
+    throw new Error("為替予約の登録に失敗しました。");
+  }
 
-  await sql`
-    insert into fx_registration_history (reservation_id, reservation_no, bank, currency, amount, rate)
-    values (${rows[0].id}, ${reservationNo}, ${bank}, ${currency}, ${originalAmount}, ${rate})
-  `;
+  const { error: historyError } = await supabase.from("fx_registration_history").insert({
+    reservation_id: reservation.id,
+    reservation_no: reservationNo,
+    bank,
+    currency,
+    amount: originalAmount,
+    rate
+  });
+  throwIfError(historyError);
 
   revalidatePath("/fx-reservations");
   revalidatePath("/history");
@@ -120,33 +196,39 @@ export async function createFxReservation(formData: FormData) {
 }
 
 export async function createDepositTransaction(formData: FormData) {
+  const { supabase } = await authenticatedClient();
   const depositId = value(formData, "deposit_id");
   const amount = numberValue(formData, "amount");
   const memo = value(formData, "memo");
 
   if (!depositId || amount <= 0) {
-    throw new Error("入金先口座と入金額を入力してください。");
+    throw new Error("入金口座と入金額を入力してください。");
   }
 
-  const deposits = await sql`
-    select * from foreign_deposit_accounts where id = ${depositId} limit 1
-  `;
-  const deposit = deposits[0];
-
+  const { data: deposit, error: selectError } = await supabase
+    .from("foreign_deposit_accounts")
+    .select("*")
+    .eq("id", depositId)
+    .single();
+  throwIfError(selectError);
   if (!deposit) {
-    throw new Error("入金先口座が見つかりません。");
+    throw new Error("入金口座が見つかりません。");
   }
 
-  await sql`
-    update foreign_deposit_accounts
-    set balance = balance + ${amount}
-    where id = ${depositId}
-  `;
+  const { error: updateError } = await supabase
+    .from("foreign_deposit_accounts")
+    .update({ balance: toNumber(deposit.balance) + amount })
+    .eq("id", depositId);
+  throwIfError(updateError);
 
-  await sql`
-    insert into foreign_deposit_transactions (deposit_id, bank, currency, amount, memo)
-    values (${depositId}, ${deposit.bank}, ${deposit.currency}, ${amount}, ${memo})
-  `;
+  const { error: insertError } = await supabase.from("foreign_deposit_transactions").insert({
+    deposit_id: depositId,
+    bank: deposit.bank,
+    currency: deposit.currency,
+    amount,
+    memo
+  });
+  throwIfError(insertError);
 
   revalidatePath("/foreign-deposits");
   revalidatePath("/history");
@@ -154,15 +236,18 @@ export async function createDepositTransaction(formData: FormData) {
 }
 
 export async function markRequestPaid(formData: FormData) {
+  const { supabase } = await authenticatedClient();
   const requestId = value(formData, "request_id");
   if (!requestId) {
     throw new Error("申請IDがありません。");
   }
 
-  const requests = await sql`
-    select * from remittance_requests where id = ${requestId} limit 1
-  `;
-  const request = requests[0];
+  const { data: request, error: requestError } = await supabase
+    .from("remittance_requests")
+    .select("*")
+    .eq("id", requestId)
+    .single();
+  throwIfError(requestError);
 
   if (!request || request.status === "支払済") {
     revalidatePath("/history");
@@ -170,31 +255,48 @@ export async function markRequestPaid(formData: FormData) {
   }
 
   if (request.settlement_method === "為替予約") {
-    const allocations = await sql`
-      select * from remittance_fx_allocations where request_id = ${requestId}
-    `;
-    for (const allocation of allocations) {
-      await sql`
-        update fx_reservations
-        set used_amount = used_amount + ${toNumber(allocation.amount)}
-        where id = ${allocation.reservation_id}
-      `;
+    const { data: allocations, error } = await supabase
+      .from("remittance_fx_allocations")
+      .select("amount, reservation_id, fx_reservations(used_amount)")
+      .eq("request_id", requestId);
+    throwIfError(error);
+
+    for (const allocation of allocations ?? []) {
+      const reservation = Array.isArray(allocation.fx_reservations)
+        ? allocation.fx_reservations[0]
+        : allocation.fx_reservations;
+      const nextUsedAmount = toNumber(reservation?.used_amount) + toNumber(allocation.amount);
+      const { error: updateError } = await supabase
+        .from("fx_reservations")
+        .update({ used_amount: nextUsedAmount })
+        .eq("id", allocation.reservation_id);
+      throwIfError(updateError);
     }
   }
 
   if (request.settlement_method === "外貨預金" && request.foreign_deposit_id) {
-    await sql`
-      update foreign_deposit_accounts
-      set balance = balance - ${toNumber(request.amount)}
-      where id = ${request.foreign_deposit_id}
-    `;
+    const { data: deposit, error } = await supabase
+      .from("foreign_deposit_accounts")
+      .select("balance")
+      .eq("id", request.foreign_deposit_id)
+      .single();
+    throwIfError(error);
+    if (!deposit) {
+      throw new Error("外貨預金口座が見つかりません。");
+    }
+
+    const { error: updateError } = await supabase
+      .from("foreign_deposit_accounts")
+      .update({ balance: toNumber(deposit.balance) - toNumber(request.amount) })
+      .eq("id", request.foreign_deposit_id);
+    throwIfError(updateError);
   }
 
-  await sql`
-    update remittance_requests
-    set status = '支払済'
-    where id = ${requestId}
-  `;
+  const { error: paidError } = await supabase
+    .from("remittance_requests")
+    .update({ status: "支払済" })
+    .eq("id", requestId);
+  throwIfError(paidError);
 
   revalidatePath("/history");
   revalidatePath("/fx-reservations");

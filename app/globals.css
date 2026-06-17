@@ -81,6 +81,25 @@ textarea {
   background: var(--sidebar-soft);
 }
 
+.sidebar-footer {
+  margin-top: auto;
+}
+
+.sidebar-footer button {
+  display: inline-flex;
+  width: 100%;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid rgba(229, 237, 247, 0.18);
+  border-radius: 8px;
+  background: transparent;
+  color: #d9e2ee;
+  cursor: pointer;
+  font-weight: 700;
+}
+
 .main {
   display: grid;
   align-content: start;
@@ -320,6 +339,55 @@ th {
 
 .history-section + .history-section {
   margin-top: 18px;
+}
+
+.empty {
+  margin: 0;
+  color: var(--muted);
+}
+
+.login-page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+}
+
+.login-panel {
+  display: grid;
+  width: min(100%, 440px);
+  gap: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  padding: 24px;
+}
+
+.login-panel h1 {
+  margin: 6px 0;
+}
+
+.login-panel p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.login-kicker {
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.login-form {
+  display: grid;
+  gap: 12px;
+}
+
+.signup-form {
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
 }
 
 .status {

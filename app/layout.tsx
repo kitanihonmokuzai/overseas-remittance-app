@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "海外送金申請",
-  description: "Neon Postgresで管理する海外送金申請Webアプリ"
+  description: "Supabaseで管理する海外送金申請Webアプリ"
 };
 
 export const viewport: Viewport = {

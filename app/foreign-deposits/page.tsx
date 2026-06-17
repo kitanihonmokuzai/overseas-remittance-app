@@ -16,7 +16,7 @@ export default async function ForeignDepositsPage() {
       action={<Link className="primary" href="/foreign-deposits/deposit"><Plus size={18} />入金登録</Link>}
     >
       <section className="deposit-grid">
-        {deposits.map((deposit) => (
+        {deposits.length === 0 ? <p className="empty">外貨預金口座はまだ登録されていません。</p> : deposits.map((deposit) => (
           <div className="deposit-card" key={deposit.id}>
             <Banknote size={20} />
             <strong>{deposit.bank} / {deposit.currency}</strong>

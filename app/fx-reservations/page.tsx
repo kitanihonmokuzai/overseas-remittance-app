@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Landmark } from "lucide-react";
+import { Landmark, Plus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { formatAmount, formatDate, remaining } from "@/lib/db";
 import { getFxReservations } from "@/lib/queries";
@@ -18,12 +18,14 @@ export default async function FxReservationsPage() {
   return (
     <AppShell
       title="為替予約"
-      description="銀行別、通貨別に予約残高を確認します。"
+      description="銀行別、通貨別に為替予約の残高を確認します。"
       action={<Link className="primary" href="/fx-reservations/new"><Plus size={18} />予約登録</Link>}
     >
       <section className="panel">
         <div className="finance-list">
-          {Object.entries(grouped).map(([bank, currencies]) => (
+          {Object.entries(grouped).length === 0 ? (
+            <p className="empty">為替予約はまだ登録されていません。</p>
+          ) : Object.entries(grouped).map(([bank, currencies]) => (
             <div className="bank-group" key={bank}>
               <h2><Landmark size={18} />{bank}</h2>
               {Object.entries(currencies).map(([currency, items]) => (

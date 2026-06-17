@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ReactNode } from "react";
-import { Database } from "lucide-react";
+import { Database, LogOut } from "lucide-react";
+import { signOut } from "@/lib/actions";
 
 const navItems = [
   { href: "/transfer-request", label: "送金申請" },
@@ -24,7 +25,7 @@ export function AppShell({
     <main className="app-shell">
       <aside className="sidebar">
         <strong>海外送金申請</strong>
-        <span>Neon Postgres</span>
+        <span>Supabase</span>
         <nav>
           {navItems.map((item) => (
             <Link href={item.href} key={item.href}>
@@ -32,6 +33,9 @@ export function AppShell({
             </Link>
           ))}
         </nav>
+        <form action={signOut} className="sidebar-footer">
+          <button type="submit"><LogOut size={16} />ログアウト</button>
+        </form>
       </aside>
 
       <section className="main">
@@ -41,7 +45,7 @@ export function AppShell({
             <p>{description}</p>
           </div>
           <div className="header-actions">
-            <span className="mode-badge"><Database size={16} />Neon</span>
+            <span className="mode-badge"><Database size={16} />Supabase</span>
             {action}
           </div>
         </header>
