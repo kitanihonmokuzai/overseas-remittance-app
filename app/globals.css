@@ -434,7 +434,8 @@ th {
   padding: 24px;
 }
 
-.login-panel {
+.login-panel,
+.error-panel {
   display: grid;
   width: min(100%, 440px);
   gap: 18px;
@@ -445,11 +446,13 @@ th {
   padding: 24px;
 }
 
-.login-panel h1 {
+.login-panel h1,
+.error-panel h1 {
   margin: 6px 0;
 }
 
-.login-panel p {
+.login-panel p,
+.error-panel p {
   margin: 0;
   color: var(--muted);
   line-height: 1.6;
@@ -469,6 +472,42 @@ th {
 .signup-form {
   border-top: 1px solid var(--line);
   padding-top: 18px;
+}
+
+.error-page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+}
+
+.error-panel code,
+.setup-body code {
+  border-radius: 6px;
+  background: #eef2f7;
+  padding: 3px 6px;
+  color: #263446;
+}
+
+.setup-panel {
+  max-width: 900px;
+}
+
+.setup-body {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.setup-body p,
+.setup-body ul {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.setup-body li + li {
+  margin-top: 6px;
 }
 
 .status {
