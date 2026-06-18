@@ -1,16 +1,9 @@
-import Link from "next/link";
 import { ReactNode } from "react";
-import { Database, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { signOut } from "@/lib/actions";
 import { SubmitButton } from "@/components/SubmitButton";
+import { NavLinks } from "@/components/NavLinks";
 import { roleLabel, type UserRole } from "@/lib/db";
-
-const navItems = [
-  { href: "/transfer-request", label: "送金申請" },
-  { href: "/fx-reservations", label: "為替予約" },
-  { href: "/foreign-deposits", label: "外貨預金" },
-  { href: "/history", label: "履歴" }
-];
 
 export function AppShell({
   action,
@@ -28,16 +21,16 @@ export function AppShell({
   return (
     <main className="app-shell">
       <aside className="sidebar">
-        <strong>海外送金申請</strong>
-        <span>Supabase</span>
-        <nav>
-          {navItems.map((item) => (
-            <Link href={item.href} key={item.href}>
-              {item.label}
-            </Link>
-          ))}
-          {role === "admin" ? <Link href="/admin/users">ユーザー管理</Link> : null}
-        </nav>
+        <div className="brand">
+          <span className="brand-mark">FX</span>
+          <div className="brand-text">
+            <strong>海外送金管理</strong>
+            <span>Treasury Console</span>
+          </div>
+        </div>
+
+        <NavLinks role={role} />
+
         <form action={signOut} className="sidebar-footer">
           <SubmitButton
             className="sidebar-button"
@@ -52,13 +45,12 @@ export function AppShell({
 
       <section className="main">
         <header className="page-header">
-          <div>
+          <div className="page-heading">
             <h1>{title}</h1>
             <p>{description}</p>
           </div>
           <div className="header-actions">
-            <span className="mode-badge"><Database size={16} />Supabase</span>
-            {role ? <span className="mode-badge">{roleLabel(role)}</span> : null}
+            {role ? <span className="role-badge">{roleLabel(role)}</span> : null}
             {action}
           </div>
         </header>
