@@ -1,18 +1,23 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Save } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { SubmitButton } from "@/components/SubmitButton";
 import { createDepositTransaction } from "@/lib/actions";
-import { formatAmount } from "@/lib/db";
-import { getForeignDeposits } from "@/lib/queries";
+import { canOperate, formatAmount } from "@/lib/db";
+import { getCurrentProfile, getForeignDeposits } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function DepositTransactionPage() {
   const deposits = await getForeignDeposits();
+  const profile = await getCurrentProfile();
+  if (!canOperate(profile.role)) {
+    redirect("/foreign-deposits");
+  }
 
   return (
-    <AppShell title="外貨預金 入金登録" description="外貨預金口座への入金を登録します。" action={<Link className="secondary" href="/foreign-deposits">一覧へ戻る</Link>}>
+    <AppShell title="外貨預金 入金登録" description="外貨預金口座への入金を登録します。" role={profile.role} action={<Link className="secondary" href="/foreign-deposits">一覧へ戻る</Link>}>
       <form action={createDepositTransaction} className="panel slim-panel">
         <div className="form-grid">
           <label>

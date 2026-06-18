@@ -3,6 +3,7 @@ import { ReactNode } from "react";
 import { Database, LogOut } from "lucide-react";
 import { signOut } from "@/lib/actions";
 import { SubmitButton } from "@/components/SubmitButton";
+import { roleLabel, type UserRole } from "@/lib/db";
 
 const navItems = [
   { href: "/transfer-request", label: "送金申請" },
@@ -15,11 +16,13 @@ export function AppShell({
   action,
   children,
   description,
+  role,
   title
 }: {
   action?: ReactNode;
   children: ReactNode;
   description: string;
+  role?: UserRole;
   title: string;
 }) {
   return (
@@ -33,6 +36,7 @@ export function AppShell({
               {item.label}
             </Link>
           ))}
+          {role === "admin" ? <Link href="/admin/users">ユーザー管理</Link> : null}
         </nav>
         <form action={signOut} className="sidebar-footer">
           <SubmitButton
@@ -54,6 +58,7 @@ export function AppShell({
           </div>
           <div className="header-actions">
             <span className="mode-badge"><Database size={16} />Supabase</span>
+            {role ? <span className="mode-badge">{roleLabel(role)}</span> : null}
             {action}
           </div>
         </header>

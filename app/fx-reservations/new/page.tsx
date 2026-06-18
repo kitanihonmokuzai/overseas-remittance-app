@@ -1,12 +1,20 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Save } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { SubmitButton } from "@/components/SubmitButton";
 import { createFxReservation } from "@/lib/actions";
+import { canOperate } from "@/lib/db";
+import { getCurrentProfile } from "@/lib/queries";
 
-export default function NewFxReservationPage() {
+export default async function NewFxReservationPage() {
+  const profile = await getCurrentProfile();
+  if (!canOperate(profile.role)) {
+    redirect("/fx-reservations");
+  }
+
   return (
-    <AppShell title="為替予約登録" description="新しい予約Noを登録します。" action={<Link className="secondary" href="/fx-reservations">一覧へ戻る</Link>}>
+    <AppShell title="為替予約登録" description="新しい予約Noを登録します。" role={profile.role} action={<Link className="secondary" href="/fx-reservations">一覧へ戻る</Link>}>
       <form action={createFxReservation} className="panel slim-panel">
         <div className="form-grid">
           <label>予約No<input name="reservation_no" required /></label>

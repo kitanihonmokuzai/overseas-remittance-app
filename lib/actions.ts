@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { toNumber } from "@/lib/db";
+import type { SettlementMethod, UserRole } from "@/lib/db";
 
 function value(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -29,6 +30,50 @@ function throwIfError(error: { message: string } | null) {
   if (error) {
     throw new Error(error.message);
   }
+}
+
+async function currentRole(supabase: Awaited<ReturnType<typeof createClient>>, userId: string): Promise<UserRole> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error || !data?.role) {
+    return "user";
+  }
+
+  return data.role as UserRole;
+}
+
+async function requireOperator(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
+  const role = await currentRole(supabase, userId);
+  if (role !== "admin" && role !== "approver") {
+    throw new Error("この操作を行う権限がありません。");
+  }
+  return role;
+}
+
+async function requireAdmin(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
+  const role = await currentRole(supabase, userId);
+  if (role !== "admin") {
+    throw new Error("この操作は管理者のみ実行できます。");
+  }
+  return role;
+}
+
+function collectSettlementAllocations(formData: FormData) {
+  const methods = formData.getAll("allocation_method").map((item) => String(item));
+  const amounts = formData.getAll("allocation_amount").map((item) => Number(String(item) || 0));
+  const reservationIds = formData.getAll("allocation_reservation_id").map((item) => String(item || ""));
+  const depositIds = formData.getAll("allocation_deposit_id").map((item) => String(item || ""));
+
+  return methods.map((method, index) => ({
+    method: method as SettlementMethod,
+    amount: amounts[index] ?? 0,
+    reservation_id: reservationIds[index] || null,
+    foreign_deposit_id: depositIds[index] || null
+  })).filter((allocation) => allocation.amount > 0);
 }
 
 export async function signIn(formData: FormData) {
@@ -70,15 +115,33 @@ export async function createRemittanceRequest(formData: FormData) {
   const payeeName = value(formData, "payee_name");
   const amount = numberValue(formData, "amount");
   const currency = value(formData, "currency");
-  const settlementMethod = value(formData, "settlement_method");
+  const allocations = collectSettlementAllocations(formData);
   const memo = value(formData, "memo");
-  const foreignDepositId = value(formData, "foreign_deposit_id");
-  const fxReservationId = value(formData, "fx_reservation_id");
-  const fxAmount = numberValue(formData, "fx_amount");
 
-  if (!remittanceDate || !payeeName || amount <= 0 || !currency || !settlementMethod) {
+  if (!remittanceDate || !payeeName || amount <= 0 || !currency) {
     throw new Error("必須項目が不足しています。");
   }
+
+  if (allocations.length === 0) {
+    throw new Error("決済方法を1件以上入力してください。");
+  }
+
+  const allocationTotal = allocations.reduce((sum, allocation) => sum + allocation.amount, 0);
+  if (Math.abs(allocationTotal - amount) > 0.01) {
+    throw new Error(`決済方法の合計 ${allocationTotal.toLocaleString("ja-JP")} が支払金額と一致していません。`);
+  }
+
+  for (const allocation of allocations) {
+    if (allocation.method === "為替予約" && !allocation.reservation_id) {
+      throw new Error("為替予約を使う明細では予約Noを選択してください。");
+    }
+    if (allocation.method === "外貨預金" && !allocation.foreign_deposit_id) {
+      throw new Error("外貨預金を使う明細では口座を選択してください。");
+    }
+  }
+
+  const uniqueMethods = Array.from(new Set(allocations.map((allocation) => allocation.method)));
+  const settlementMethod = uniqueMethods.length === 1 ? uniqueMethods[0] : "複合";
 
   const beneficiary = {
     bankName: value(formData, "bank_name"),
@@ -99,7 +162,7 @@ export async function createRemittanceRequest(formData: FormData) {
       amount,
       currency,
       settlement_method: settlementMethod,
-      foreign_deposit_id: foreignDepositId || null,
+      foreign_deposit_id: allocations.find((allocation) => allocation.method === "外貨預金")?.foreign_deposit_id ?? null,
       memo,
       beneficiary,
       status: "申請中",
@@ -114,11 +177,22 @@ export async function createRemittanceRequest(formData: FormData) {
 
   const requestId = request.id as string;
 
-  if (settlementMethod === "為替予約" && fxReservationId && fxAmount > 0) {
+  const { error: allocationError } = await supabase.from("remittance_settlement_allocations").insert(
+    allocations.map((allocation) => ({
+      request_id: requestId,
+      method: allocation.method,
+      reservation_id: allocation.method === "為替予約" ? allocation.reservation_id : null,
+      foreign_deposit_id: allocation.method === "外貨預金" ? allocation.foreign_deposit_id : null,
+      amount: allocation.amount
+    }))
+  );
+  throwIfError(allocationError);
+
+  for (const allocation of allocations.filter((item) => item.method === "為替予約" && item.reservation_id)) {
     const { error } = await supabase.from("remittance_fx_allocations").insert({
       request_id: requestId,
-      reservation_id: fxReservationId,
-      amount: fxAmount
+      reservation_id: allocation.reservation_id,
+      amount: allocation.amount
     });
     throwIfError(error);
   }
@@ -148,7 +222,8 @@ export async function createRemittanceRequest(formData: FormData) {
 }
 
 export async function createFxReservation(formData: FormData) {
-  const { supabase } = await authenticatedClient();
+  const { supabase, user } = await authenticatedClient();
+  await requireOperator(supabase, user.id);
   const reservationNo = value(formData, "reservation_no");
   const bank = value(formData, "bank");
   const currency = value(formData, "currency");
@@ -196,7 +271,8 @@ export async function createFxReservation(formData: FormData) {
 }
 
 export async function createDepositTransaction(formData: FormData) {
-  const { supabase } = await authenticatedClient();
+  const { supabase, user } = await authenticatedClient();
+  await requireOperator(supabase, user.id);
   const depositId = value(formData, "deposit_id");
   const amount = numberValue(formData, "amount");
   const memo = value(formData, "memo");
@@ -236,7 +312,8 @@ export async function createDepositTransaction(formData: FormData) {
 }
 
 export async function markRequestPaid(formData: FormData) {
-  const { supabase } = await authenticatedClient();
+  const { supabase, user } = await authenticatedClient();
+  await requireOperator(supabase, user.id);
   const requestId = value(formData, "request_id");
   if (!requestId) {
     throw new Error("申請IDがありません。");
@@ -254,7 +331,45 @@ export async function markRequestPaid(formData: FormData) {
     return;
   }
 
-  if (request.settlement_method === "為替予約") {
+  const { data: settlementAllocations, error: settlementError } = await supabase
+    .from("remittance_settlement_allocations")
+    .select("*")
+    .eq("request_id", requestId);
+  throwIfError(settlementError);
+
+  if ((settlementAllocations ?? []).length > 0) {
+    for (const allocation of settlementAllocations ?? []) {
+      if (allocation.method === "為替予約" && allocation.reservation_id) {
+        const { data: reservation, error } = await supabase
+          .from("fx_reservations")
+          .select("used_amount")
+          .eq("id", allocation.reservation_id)
+          .single();
+        throwIfError(error);
+
+        const { error: updateError } = await supabase
+          .from("fx_reservations")
+          .update({ used_amount: toNumber(reservation?.used_amount) + toNumber(allocation.amount) })
+          .eq("id", allocation.reservation_id);
+        throwIfError(updateError);
+      }
+
+      if (allocation.method === "外貨預金" && allocation.foreign_deposit_id) {
+        const { data: deposit, error } = await supabase
+          .from("foreign_deposit_accounts")
+          .select("balance")
+          .eq("id", allocation.foreign_deposit_id)
+          .single();
+        throwIfError(error);
+
+        const { error: updateError } = await supabase
+          .from("foreign_deposit_accounts")
+          .update({ balance: toNumber(deposit?.balance) - toNumber(allocation.amount) })
+          .eq("id", allocation.foreign_deposit_id);
+        throwIfError(updateError);
+      }
+    }
+  } else if (request.settlement_method === "為替予約") {
     const { data: allocations, error } = await supabase
       .from("remittance_fx_allocations")
       .select("amount, reservation_id, fx_reservations(used_amount)")
@@ -274,7 +389,7 @@ export async function markRequestPaid(formData: FormData) {
     }
   }
 
-  if (request.settlement_method === "外貨預金" && request.foreign_deposit_id) {
+  if ((settlementAllocations ?? []).length === 0 && request.settlement_method === "外貨預金" && request.foreign_deposit_id) {
     const { data: deposit, error } = await supabase
       .from("foreign_deposit_accounts")
       .select("balance")
@@ -301,4 +416,33 @@ export async function markRequestPaid(formData: FormData) {
   revalidatePath("/history");
   revalidatePath("/fx-reservations");
   revalidatePath("/foreign-deposits");
+}
+
+export async function deleteRemittanceRequest(formData: FormData) {
+  const { supabase, user } = await authenticatedClient();
+  await requireAdmin(supabase, user.id);
+
+  const requestId = value(formData, "request_id");
+  if (!requestId) {
+    throw new Error("削除する申請IDがありません。");
+  }
+
+  const { error } = await supabase.from("remittance_requests").delete().eq("id", requestId);
+  throwIfError(error);
+  revalidatePath("/history");
+}
+
+export async function updateUserRole(formData: FormData) {
+  const { supabase, user } = await authenticatedClient();
+  await requireAdmin(supabase, user.id);
+
+  const userId = value(formData, "user_id");
+  const role = value(formData, "role") as UserRole;
+  if (!userId || !["admin", "approver", "user"].includes(role)) {
+    throw new Error("ユーザーまたは権限が不正です。");
+  }
+
+  const { error } = await supabase.from("profiles").update({ role }).eq("id", userId);
+  throwIfError(error);
+  revalidatePath("/admin/users");
 }

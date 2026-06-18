@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { Landmark, Plus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { formatAmount, formatDate, remaining } from "@/lib/db";
-import { getFxReservations } from "@/lib/queries";
+import { canOperate, formatAmount, formatDate, remaining } from "@/lib/db";
+import { getCurrentProfile, getFxReservations } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function FxReservationsPage() {
   const reservations = await getFxReservations();
+  const profile = await getCurrentProfile();
   const grouped = reservations.reduce<Record<string, Record<string, typeof reservations>>>((groups, reservation) => {
     groups[reservation.bank] ??= {};
     groups[reservation.bank][reservation.currency] ??= [];
@@ -19,7 +20,8 @@ export default async function FxReservationsPage() {
     <AppShell
       title="為替予約"
       description="銀行別、通貨別に為替予約の残高を確認します。"
-      action={<Link className="primary" href="/fx-reservations/new"><Plus size={18} />予約登録</Link>}
+      role={profile.role}
+      action={canOperate(profile.role) ? <Link className="primary" href="/fx-reservations/new"><Plus size={18} />予約登録</Link> : null}
     >
       <section className="panel">
         <div className="finance-list">

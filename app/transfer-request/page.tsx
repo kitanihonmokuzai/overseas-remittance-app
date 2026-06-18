@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { RequestForm } from "@/components/RequestForm";
-import { getForeignDeposits, getFxReservations, getPayees } from "@/lib/queries";
+import { getCurrentProfile, getForeignDeposits, getFxReservations, getPayees } from "@/lib/queries";
 import { createClient, getSupabaseConfigIssue } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -51,6 +51,7 @@ export default async function TransferRequestPage() {
     getFxReservations(),
     getForeignDeposits()
   ]);
+  const profile = await getCurrentProfile();
 
   const errors = [
     payeesResult.status === "rejected" ? `受取人マスタ: ${payeesResult.reason instanceof Error ? payeesResult.reason.message : String(payeesResult.reason)}` : null,
@@ -60,7 +61,7 @@ export default async function TransferRequestPage() {
 
   if (errors.length > 0) {
     return (
-      <AppShell title="送金申請" description="Supabaseから初期データを読み込めませんでした。">
+      <AppShell title="送金申請" description="Supabaseから初期データを読み込めませんでした。" role={profile.role}>
         <section className="panel setup-panel">
           <div className="panel-head">
             <h2>接続設定を確認してください</h2>
@@ -92,7 +93,7 @@ export default async function TransferRequestPage() {
 
   if (payees.length === 0) {
     return (
-      <AppShell title="送金申請" description="受取人マスタがまだ登録されていません。">
+      <AppShell title="送金申請" description="受取人マスタがまだ登録されていません。" role={profile.role}>
         <section className="panel setup-panel">
           <div className="panel-head">
             <h2>初期データがありません</h2>
@@ -107,7 +108,7 @@ export default async function TransferRequestPage() {
   }
 
   return (
-    <AppShell title="送金申請" description="申請フォームのみを表示します。登録後は履歴ページで確認できます。">
+    <AppShell title="送金申請" description="申請フォームのみを表示します。登録後は履歴ページで確認できます。" role={profile.role}>
       <RequestForm deposits={deposits} payees={payees} reservations={reservations} />
     </AppShell>
   );

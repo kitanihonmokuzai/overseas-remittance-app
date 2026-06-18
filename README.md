@@ -37,6 +37,12 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="your-publishable-or-anon-key"
 
 Supabase DashboardのSQL Editorで `supabase/schema.sql` を実行します。
 
+既存環境を更新する場合は、続けて以下もSQL Editorで実行します。
+
+```text
+supabase/20260618_roles_allocations.sql
+```
+
 その後、開発サーバーを起動します。
 
 ```bash
