@@ -35,15 +35,6 @@ export async function getPayees() {
   return (data ?? []) as Payee[];
 }
 
-type DepositUsageRow = {
-  amount: string | number;
-  created_at: string;
-  remittance_requests?: {
-    status?: string | null;
-    created_at?: string | null;
-  } | null;
-};
-
 export async function getCurrentProfile() {
   const supabase = await createClient();
   const { data: authData, error: authError } = await supabase.auth.getUser();
@@ -105,25 +96,34 @@ export async function getForeignDeposits() {
   const supabase = await authenticatedClient();
   const { data, error } = await supabase
     .from("foreign_deposit_accounts")
-    .select("*, remittance_settlement_allocations(amount, created_at, remittance_requests(status, created_at))")
+    .select("*")
     .order("bank")
     .order("currency");
   throwIfError(error);
 
-  return (data ?? []).map((deposit) => {
-    const allocations: DepositUsageRow[] = Array.isArray(deposit.remittance_settlement_allocations)
-      ? deposit.remittance_settlement_allocations as DepositUsageRow[]
-      : [];
-    const latest = allocations
-      .filter((allocation) => allocation.remittance_requests?.status === "支払済")
-      .sort((a, b) => new Date(b.remittance_requests?.created_at ?? b.created_at).getTime() - new Date(a.remittance_requests?.created_at ?? a.created_at).getTime())[0];
+  const deposits = (data ?? []) as ForeignDepositAccount[];
+  const { data: paidRequests } = await supabase
+    .from("remittance_requests")
+    .select("id, created_at")
+    .eq("status", "支払済");
+  const requestDates = new Map((paidRequests ?? []).map((request) => [request.id, request.created_at]));
 
+  const { data: allocations } = await supabase
+    .from("remittance_settlement_allocations")
+    .select("request_id, foreign_deposit_id, amount, created_at")
+    .eq("method", "外貨預金")
+    .not("foreign_deposit_id", "is", null);
+
+  return deposits.map((deposit) => {
+    const latest = (allocations ?? [])
+      .filter((allocation) => allocation.foreign_deposit_id === deposit.id && requestDates.has(allocation.request_id))
+      .sort((a, b) => new Date(requestDates.get(b.request_id) ?? b.created_at).getTime() - new Date(requestDates.get(a.request_id) ?? a.created_at).getTime())[0];
     return {
       ...deposit,
-      last_used_at: latest?.remittance_requests?.created_at ?? latest?.created_at ?? null,
+      last_used_at: latest ? requestDates.get(latest.request_id) ?? latest.created_at : null,
       last_used_amount: latest?.amount ?? null
     };
-  }) as ForeignDepositAccount[];
+  });
 }
 
 export async function getRemittanceRequests() {
