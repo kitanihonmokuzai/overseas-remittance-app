@@ -1,6 +1,18 @@
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 
+export function getSupabaseConfigIssue() {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    return "Vercelの環境変数 NEXT_PUBLIC_SUPABASE_URL が未設定です。";
+  }
+
+  if (!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
+    return "Vercelの環境変数 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY が未設定です。";
+  }
+
+  return null;
+}
+
 function supabaseUrl() {
   const value = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!value) {

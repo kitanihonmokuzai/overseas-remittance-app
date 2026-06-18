@@ -1,19 +1,10 @@
-import { redirect } from "next/navigation";
 import { LogIn, UserPlus } from "lucide-react";
 import { signIn, signUp } from "@/lib/actions";
-import { createClient } from "@/lib/supabase/server";
 import { SubmitButton } from "@/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getUser();
-
-  if (data.user) {
-    redirect("/transfer-request");
-  }
-
   return (
     <main className="login-page">
       <section className="login-panel">

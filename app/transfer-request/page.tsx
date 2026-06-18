@@ -2,13 +2,45 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { RequestForm } from "@/components/RequestForm";
 import { getForeignDeposits, getFxReservations, getPayees } from "@/lib/queries";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getSupabaseConfigIssue } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function TransferRequestPage() {
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.getUser();
+  const configIssue = getSupabaseConfigIssue();
+  if (configIssue) {
+    return (
+      <main className="login-page">
+        <section className="error-panel">
+          <span className="login-kicker">Setup Required</span>
+          <h1>Vercelの環境変数を確認してください</h1>
+          <p>{configIssue}</p>
+          <p>VercelのProject SettingsでProduction環境に設定し、Redeployしてください。</p>
+        </section>
+      </main>
+    );
+  }
+
+  let data;
+  let error;
+
+  try {
+    const supabase = await createClient();
+    const result = await supabase.auth.getUser();
+    data = result.data;
+    error = result.error;
+  } catch (caught) {
+    return (
+      <main className="login-page">
+        <section className="error-panel">
+          <span className="login-kicker">Setup Required</span>
+          <h1>Supabase接続を確認してください</h1>
+          <p>{caught instanceof Error ? caught.message : "Supabaseクライアントの作成に失敗しました。"}</p>
+          <p>Vercelの環境変数と再デプロイ状況を確認してください。</p>
+        </section>
+      </main>
+    );
+  }
 
   if (error || !data.user) {
     redirect("/login");
