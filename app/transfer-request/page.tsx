@@ -1,10 +1,19 @@
+import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { RequestForm } from "@/components/RequestForm";
 import { getForeignDeposits, getFxReservations, getPayees } from "@/lib/queries";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function TransferRequestPage() {
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.getUser();
+
+  if (error || !data.user) {
+    redirect("/login");
+  }
+
   const [payeesResult, reservationsResult, depositsResult] = await Promise.allSettled([
     getPayees(),
     getFxReservations(),
