@@ -41,7 +41,7 @@
   --shadow: 0 12px 28px -16px rgba(12, 26, 34, 0.28), 0 2px 6px -3px rgba(12, 26, 34, 0.12);
 
   --font-body: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --font-mono: "Roboto Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
 
 * { box-sizing: border-box; }
@@ -53,7 +53,7 @@ body {
   background: var(--workspace);
   color: var(--text);
   font-family: var(--font-body);
-  font-feature-settings: "palt" 1;
+  font-feature-settings: "palt" 1, "zero" 0;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
