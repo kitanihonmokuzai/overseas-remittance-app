@@ -41,6 +41,7 @@ Supabase DashboardのSQL Editorで `supabase/schema.sql` を実行します。
 
 ```text
 supabase/20260618_roles_allocations.sql
+supabase/20260618_fx_gain_loss.sql
 ```
 
 その後、開発サーバーを起動します。

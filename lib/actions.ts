@@ -67,12 +67,16 @@ function collectSettlementAllocations(formData: FormData) {
   const amounts = formData.getAll("allocation_amount").map((item) => Number(String(item) || 0));
   const reservationIds = formData.getAll("allocation_reservation_id").map((item) => String(item || ""));
   const depositIds = formData.getAll("allocation_deposit_id").map((item) => String(item || ""));
+  const lotIds = formData.getAll("allocation_deposit_lot_id").map((item) => String(item || ""));
+  const paymentRates = formData.getAll("allocation_payment_rate").map((item) => Number(String(item) || 0));
 
   return methods.map((method, index) => ({
     method: method as SettlementMethod,
     amount: amounts[index] ?? 0,
     reservation_id: reservationIds[index] || null,
-    foreign_deposit_id: depositIds[index] || null
+    foreign_deposit_id: depositIds[index] || null,
+    deposit_lot_id: lotIds[index] || null,
+    payment_rate: paymentRates[index] || null
   })).filter((allocation) => allocation.amount > 0);
 }
 
@@ -138,6 +142,12 @@ export async function createRemittanceRequest(formData: FormData) {
     if (allocation.method === "外貨預金" && !allocation.foreign_deposit_id) {
       throw new Error("外貨預金を使う明細では口座を選択してください。");
     }
+    if (allocation.method === "外貨預金" && !allocation.deposit_lot_id) {
+      throw new Error("外貨預金を使う明細では売上入金分を選択してください。");
+    }
+    if (allocation.method === "外貨預金" && !allocation.payment_rate) {
+      throw new Error("外貨預金を使う明細では支払時レートを入力してください。");
+    }
   }
 
   const uniqueMethods = Array.from(new Set(allocations.map((allocation) => allocation.method)));
@@ -183,6 +193,8 @@ export async function createRemittanceRequest(formData: FormData) {
       method: allocation.method,
       reservation_id: allocation.method === "為替予約" ? allocation.reservation_id : null,
       foreign_deposit_id: allocation.method === "外貨預金" ? allocation.foreign_deposit_id : null,
+      deposit_lot_id: allocation.method === "外貨預金" ? allocation.deposit_lot_id : null,
+      payment_rate: allocation.method === "外貨預金" ? allocation.payment_rate : null,
       amount: allocation.amount
     }))
   );
@@ -274,11 +286,14 @@ export async function createDepositTransaction(formData: FormData) {
   const { supabase, user } = await authenticatedClient();
   await requireOperator(supabase, user.id);
   const depositId = value(formData, "deposit_id");
+  const receivedDate = value(formData, "received_date");
+  const payerName = value(formData, "payer_name");
   const amount = numberValue(formData, "amount");
+  const receiptRate = numberValue(formData, "receipt_rate");
   const memo = value(formData, "memo");
 
-  if (!depositId || amount <= 0) {
-    throw new Error("入金口座と入金額を入力してください。");
+  if (!depositId || !receivedDate || !payerName || amount <= 0 || receiptRate <= 0) {
+    throw new Error("入金口座、入金日、入金元、入金額、入金時レートを入力してください。");
   }
 
   const { data: deposit, error: selectError } = await supabase
@@ -302,9 +317,25 @@ export async function createDepositTransaction(formData: FormData) {
     bank: deposit.bank,
     currency: deposit.currency,
     amount,
+    received_date: receivedDate,
+    payer_name: payerName,
+    receipt_rate: receiptRate,
     memo
   });
   throwIfError(insertError);
+
+  const { error: lotError } = await supabase.from("foreign_deposit_lots").insert({
+    deposit_id: depositId,
+    received_date: receivedDate,
+    payer_name: payerName,
+    bank: deposit.bank,
+    currency: deposit.currency,
+    original_amount: amount,
+    remaining_amount: amount,
+    receipt_rate: receiptRate,
+    memo
+  });
+  throwIfError(lotError);
 
   revalidatePath("/foreign-deposits");
   revalidatePath("/history");
@@ -355,6 +386,23 @@ export async function markRequestPaid(formData: FormData) {
       }
 
       if (allocation.method === "外貨預金" && allocation.foreign_deposit_id) {
+        const depositLotId = allocation.deposit_lot_id as string | null;
+        const paymentRate = toNumber(allocation.payment_rate);
+        if (!depositLotId || paymentRate <= 0) {
+          throw new Error("外貨預金の売上入金分または支払時レートが不足しています。");
+        }
+
+        const { data: lot, error: lotError } = await supabase
+          .from("foreign_deposit_lots")
+          .select("*")
+          .eq("id", depositLotId)
+          .single();
+        throwIfError(lotError);
+
+        if (toNumber(lot?.remaining_amount) < toNumber(allocation.amount)) {
+          throw new Error("選択した売上入金分の残高が不足しています。");
+        }
+
         const { data: deposit, error } = await supabase
           .from("foreign_deposit_accounts")
           .select("balance")
@@ -367,6 +415,38 @@ export async function markRequestPaid(formData: FormData) {
           .update({ balance: toNumber(deposit?.balance) - toNumber(allocation.amount) })
           .eq("id", allocation.foreign_deposit_id);
         throwIfError(updateError);
+
+        const receiptRate = toNumber(lot.receipt_rate);
+        const gainLoss = (paymentRate - receiptRate) * toNumber(allocation.amount);
+
+        const { error: lotUpdateError } = await supabase
+          .from("foreign_deposit_lots")
+          .update({ remaining_amount: toNumber(lot.remaining_amount) - toNumber(allocation.amount) })
+          .eq("id", depositLotId);
+        throwIfError(lotUpdateError);
+
+        const { error: usageError } = await supabase.from("remittance_deposit_lot_usages").insert({
+          request_id: requestId,
+          settlement_allocation_id: allocation.id,
+          deposit_lot_id: depositLotId,
+          amount: allocation.amount,
+          payment_rate: paymentRate,
+          receipt_rate: receiptRate,
+          gain_loss_jpy: gainLoss
+        });
+        throwIfError(usageError);
+
+        const { error: historyError } = await supabase.from("fx_gain_loss_history").insert({
+          request_id: requestId,
+          deposit_lot_id: depositLotId,
+          payee_name: request.payee_name,
+          currency: request.currency,
+          foreign_amount: allocation.amount,
+          receipt_rate: receiptRate,
+          payment_rate: paymentRate,
+          gain_loss_jpy: gainLoss
+        });
+        throwIfError(historyError);
       }
     }
   } else if (request.settlement_method === "為替予約") {

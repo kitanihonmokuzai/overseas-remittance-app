@@ -33,6 +33,20 @@ export type ForeignDepositAccount = {
   last_used_amount?: string | number | null;
 };
 
+export type ForeignDepositLot = {
+  id: string;
+  deposit_id: string;
+  received_date: string;
+  payer_name: string;
+  bank: string;
+  currency: string;
+  original_amount: string | number;
+  remaining_amount: string | number;
+  receipt_rate: string | number;
+  memo: string;
+  created_at: string;
+};
+
 export type UserRole = "admin" | "approver" | "user";
 
 export type UserProfile = {
@@ -50,6 +64,8 @@ export type SettlementAllocation = {
   method: SettlementMethod;
   reservation_id: string | null;
   foreign_deposit_id: string | null;
+  deposit_lot_id?: string | null;
+  payment_rate?: string | number | null;
   amount: string | number;
 };
 
@@ -82,7 +98,23 @@ export type DepositTransaction = {
   bank: string;
   currency: string;
   amount: string | number;
+  received_date?: string | null;
+  payer_name?: string | null;
+  receipt_rate?: string | number | null;
   memo: string;
+  created_at: string;
+};
+
+export type FxGainLossHistory = {
+  id: string;
+  request_id: string;
+  deposit_lot_id: string;
+  payee_name: string;
+  currency: string;
+  foreign_amount: string | number;
+  receipt_rate: string | number;
+  payment_rate: string | number;
+  gain_loss_jpy: string | number;
   created_at: string;
 };
 
@@ -100,6 +132,13 @@ export function formatAmount(value: string | number, currency: string) {
 
 export function formatDate(value: string | Date) {
   return new Date(value).toLocaleDateString("ja-JP");
+}
+
+export function formatRate(value: string | number | null | undefined) {
+  return new Intl.NumberFormat("ja-JP", {
+    maximumFractionDigits: 4,
+    minimumFractionDigits: 2
+  }).format(toNumber(value));
 }
 
 export function remaining(reservation: FxReservation) {

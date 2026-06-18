@@ -2,7 +2,9 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type {
   DepositTransaction,
+  ForeignDepositLot,
   ForeignDepositAccount,
+  FxGainLossHistory,
   FxRegistrationHistory,
   FxReservation,
   Payee,
@@ -126,11 +128,27 @@ export async function getForeignDeposits() {
   });
 }
 
+export async function getForeignDepositLots() {
+  const supabase = await authenticatedClient();
+  const { data, error } = await supabase
+    .from("foreign_deposit_lots")
+    .select("*")
+    .order("received_date", { ascending: true })
+    .order("created_at", { ascending: true });
+  throwIfError(error);
+  return (data ?? []) as ForeignDepositLot[];
+}
+
+export async function getAvailableForeignDepositLots() {
+  const lots = await getForeignDepositLots();
+  return lots.filter((lot) => Number(lot.remaining_amount) > 0);
+}
+
 export async function getRemittanceRequests() {
   const supabase = await authenticatedClient();
   const { data, error } = await supabase
     .from("remittance_requests")
-    .select("id, remittance_date, payee_name, amount, currency, settlement_method, memo, status, created_at, remittance_files(id), remittance_settlement_allocations(id, request_id, method, reservation_id, foreign_deposit_id, amount)")
+    .select("id, remittance_date, payee_name, amount, currency, settlement_method, memo, status, created_at, remittance_files(id), remittance_settlement_allocations(id, request_id, method, reservation_id, foreign_deposit_id, deposit_lot_id, payment_rate, amount)")
     .order("created_at", { ascending: false });
   throwIfError(error);
 
@@ -158,4 +176,14 @@ export async function getDepositTransactions() {
     .order("created_at", { ascending: false });
   throwIfError(error);
   return (data ?? []) as DepositTransaction[];
+}
+
+export async function getFxGainLossHistory() {
+  const supabase = await authenticatedClient();
+  const { data, error } = await supabase
+    .from("fx_gain_loss_history")
+    .select("*")
+    .order("created_at", { ascending: false });
+  throwIfError(error);
+  return (data ?? []) as FxGainLossHistory[];
 }

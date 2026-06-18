@@ -2,16 +2,17 @@ import { CheckCircle2, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { SubmitButton } from "@/components/SubmitButton";
 import { deleteRemittanceRequest, markRequestPaid } from "@/lib/actions";
-import { canDeleteHistory, canOperate, formatAmount, formatDate } from "@/lib/db";
-import { getCurrentProfile, getDepositTransactions, getFxRegistrationHistory, getRemittanceRequests } from "@/lib/queries";
+import { canDeleteHistory, canOperate, formatAmount, formatDate, formatRate } from "@/lib/db";
+import { getCurrentProfile, getDepositTransactions, getFxGainLossHistory, getFxRegistrationHistory, getRemittanceRequests } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function HistoryPage() {
-  const [requests, fxHistory, depositHistory] = await Promise.all([
+  const [requests, fxHistory, depositHistory, gainLossHistory] = await Promise.all([
     getRemittanceRequests(),
     getFxRegistrationHistory(),
-    getDepositTransactions()
+    getDepositTransactions(),
+    getFxGainLossHistory()
   ]);
   const profile = await getCurrentProfile();
   const visibleRequests = requests.slice(0, 3);
@@ -20,6 +21,8 @@ export default async function HistoryPage() {
   const hiddenFxHistory = fxHistory.slice(3);
   const visibleDepositHistory = depositHistory.slice(0, 3);
   const hiddenDepositHistory = depositHistory.slice(3);
+  const visibleGainLossHistory = gainLossHistory.slice(0, 3);
+  const hiddenGainLossHistory = gainLossHistory.slice(3);
 
   function requestRows(items: typeof requests) {
     return items.map((request) => {
@@ -108,16 +111,52 @@ export default async function HistoryPage() {
         <div className="panel-head"><h2>外貨預金入金履歴</h2><span>{depositHistory.length}件</span></div>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>登録日時</th><th>銀行</th><th>通貨</th><th>入金額</th><th>備考</th></tr></thead>
-            <tbody>{depositHistory.length === 0 ? <tr><td colSpan={5}>入金履歴はまだありません。</td></tr> : visibleDepositHistory.map((item) => (
-              <tr key={item.id}><td>{new Date(item.created_at).toLocaleString("ja-JP")}</td><td>{item.bank}</td><td>{item.currency}</td><td>{formatAmount(item.amount, item.currency)}</td><td>{item.memo || "-"}</td></tr>
+            <thead><tr><th>入金日</th><th>入金元</th><th>銀行</th><th>通貨</th><th>入金額</th><th>入金時レート</th><th>備考</th></tr></thead>
+            <tbody>{depositHistory.length === 0 ? <tr><td colSpan={7}>入金履歴はまだありません。</td></tr> : visibleDepositHistory.map((item) => (
+              <tr key={item.id}><td>{item.received_date ? new Date(item.received_date).toLocaleDateString("ja-JP") : new Date(item.created_at).toLocaleDateString("ja-JP")}</td><td>{item.payer_name || "-"}</td><td>{item.bank}</td><td>{item.currency}</td><td>{formatAmount(item.amount, item.currency)}</td><td>{item.receipt_rate ? formatRate(item.receipt_rate) : "-"}</td><td>{item.memo || "-"}</td></tr>
             ))}</tbody>
           </table>
           {hiddenDepositHistory.length > 0 ? (
             <details className="history-more">
               <summary>残り{hiddenDepositHistory.length}件を表示</summary>
               <table><tbody>{hiddenDepositHistory.map((item) => (
-                <tr key={item.id}><td>{new Date(item.created_at).toLocaleString("ja-JP")}</td><td>{item.bank}</td><td>{item.currency}</td><td>{formatAmount(item.amount, item.currency)}</td><td>{item.memo || "-"}</td></tr>
+                <tr key={item.id}><td>{item.received_date ? new Date(item.received_date).toLocaleDateString("ja-JP") : new Date(item.created_at).toLocaleDateString("ja-JP")}</td><td>{item.payer_name || "-"}</td><td>{item.bank}</td><td>{item.currency}</td><td>{formatAmount(item.amount, item.currency)}</td><td>{item.receipt_rate ? formatRate(item.receipt_rate) : "-"}</td><td>{item.memo || "-"}</td></tr>
+              ))}</tbody></table>
+            </details>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="panel history-section">
+        <div className="panel-head"><h2>為替差損益履歴</h2><span>{gainLossHistory.length}件</span></div>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>計上日時</th><th>支払先</th><th>通貨</th><th>使用額</th><th>入金時レート</th><th>支払時レート</th><th>為替差損益</th></tr></thead>
+            <tbody>{gainLossHistory.length === 0 ? <tr><td colSpan={7}>為替差損益履歴はまだありません。</td></tr> : visibleGainLossHistory.map((item) => (
+              <tr key={item.id}>
+                <td>{new Date(item.created_at).toLocaleString("ja-JP")}</td>
+                <td>{item.payee_name}</td>
+                <td>{item.currency}</td>
+                <td>{formatAmount(item.foreign_amount, item.currency)}</td>
+                <td>{formatRate(item.receipt_rate)}</td>
+                <td>{formatRate(item.payment_rate)}</td>
+                <td className={Number(item.gain_loss_jpy) >= 0 ? "gain" : "loss"}>{Number(item.gain_loss_jpy).toLocaleString("ja-JP")}円</td>
+              </tr>
+            ))}</tbody>
+          </table>
+          {hiddenGainLossHistory.length > 0 ? (
+            <details className="history-more">
+              <summary>残り{hiddenGainLossHistory.length}件を表示</summary>
+              <table><tbody>{hiddenGainLossHistory.map((item) => (
+                <tr key={item.id}>
+                  <td>{new Date(item.created_at).toLocaleString("ja-JP")}</td>
+                  <td>{item.payee_name}</td>
+                  <td>{item.currency}</td>
+                  <td>{formatAmount(item.foreign_amount, item.currency)}</td>
+                  <td>{formatRate(item.receipt_rate)}</td>
+                  <td>{formatRate(item.payment_rate)}</td>
+                  <td className={Number(item.gain_loss_jpy) >= 0 ? "gain" : "loss"}>{Number(item.gain_loss_jpy).toLocaleString("ja-JP")}円</td>
+                </tr>
               ))}</tbody></table>
             </details>
           ) : null}

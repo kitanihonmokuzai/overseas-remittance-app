@@ -4,8 +4,8 @@ import { FormEvent, useMemo, useState } from "react";
 import { Plus, Send, Trash2 } from "lucide-react";
 import { createRemittanceRequest } from "@/lib/actions";
 import { SubmitButton } from "@/components/SubmitButton";
-import type { ForeignDepositAccount, FxReservation, Payee, SettlementMethod } from "@/lib/db";
-import { formatAmount, remaining, toNumber } from "@/lib/db";
+import type { ForeignDepositAccount, ForeignDepositLot, FxReservation, Payee, SettlementMethod } from "@/lib/db";
+import { formatAmount, formatRate, remaining, toNumber } from "@/lib/db";
 
 type Beneficiary = {
   bank_name: string;
@@ -23,6 +23,8 @@ type AllocationRow = {
   amount: string;
   reservationId: string;
   depositId: string;
+  depositLotId: string;
+  paymentRate: string;
 };
 
 function beneficiaryFromPayee(payee?: Payee): Beneficiary {
@@ -43,16 +45,20 @@ function newAllocation(method: SettlementMethod = "為替予約"): AllocationRow
     method,
     amount: "",
     reservationId: "",
-    depositId: ""
+    depositId: "",
+    depositLotId: "",
+    paymentRate: ""
   };
 }
 
 export function RequestForm({
   deposits,
+  lots,
   payees,
   reservations
 }: {
   deposits: ForeignDepositAccount[];
+  lots: ForeignDepositLot[];
   payees: Payee[];
   reservations: FxReservation[];
 }) {
@@ -66,6 +72,7 @@ export function RequestForm({
 
   const filteredReservations = reservations.filter((reservation) => reservation.currency === currency);
   const filteredDeposits = deposits.filter((deposit) => deposit.currency === currency);
+  const filteredLots = lots.filter((lot) => lot.currency === currency && toNumber(lot.remaining_amount) > 0);
   const allocationTotal = allocations.reduce((sum, allocation) => sum + toNumber(allocation.amount), 0);
   const amountNumber = toNumber(amount);
   const totalMatches = amountNumber > 0 && Math.abs(allocationTotal - amountNumber) <= 0.01;
@@ -147,7 +154,8 @@ export function RequestForm({
         <div className="allocation-list">
           {allocations.map((allocation, index) => {
             const selectedReservation = filteredReservations.find((reservation) => reservation.id === allocation.reservationId);
-            const selectedDeposit = filteredDeposits.find((deposit) => deposit.id === allocation.depositId);
+            const selectedLot = filteredLots.find((lot) => lot.id === allocation.depositLotId);
+            const selectedDeposit = selectedLot ? filteredDeposits.find((deposit) => deposit.id === selectedLot.deposit_id) : undefined;
 
             return (
               <div className="allocation-card" key={allocation.id}>
@@ -156,7 +164,7 @@ export function RequestForm({
                   方法
                   <select
                     name="allocation_method"
-                    onChange={(event) => updateAllocation(allocation.id, { method: event.target.value as SettlementMethod, reservationId: "", depositId: "" })}
+                    onChange={(event) => updateAllocation(allocation.id, { method: event.target.value as SettlementMethod, reservationId: "", depositId: "", depositLotId: "", paymentRate: "" })}
                     value={allocation.method}
                   >
                     <option>スポット</option>
@@ -178,26 +186,49 @@ export function RequestForm({
                       ))}
                     </select>
                     <input name="allocation_deposit_id" type="hidden" value="" />
+                    <input name="allocation_deposit_lot_id" type="hidden" value="" />
+                    <input name="allocation_payment_rate" type="hidden" value="" />
                     {selectedReservation ? <small>レート {selectedReservation.rate} / 期間 {selectedReservation.period || "-"}</small> : null}
                   </label>
                 ) : allocation.method === "外貨預金" ? (
                   <label className="wide-field">
-                    外貨預金口座
-                    <select name="allocation_deposit_id" onChange={(event) => updateAllocation(allocation.id, { depositId: event.target.value })} required value={allocation.depositId}>
+                    売上入金分
+                    <select
+                      name="allocation_deposit_lot_id"
+                      onChange={(event) => {
+                        const lot = filteredLots.find((item) => item.id === event.target.value);
+                        updateAllocation(allocation.id, {
+                          depositLotId: event.target.value,
+                          depositId: lot?.deposit_id ?? ""
+                        });
+                      }}
+                      required
+                      value={allocation.depositLotId}
+                    >
                       <option value="">選択してください</option>
-                      {filteredDeposits.map((deposit) => (
-                        <option key={deposit.id} value={deposit.id}>
-                          {deposit.bank} / {deposit.account_name} / 残 {formatAmount(deposit.balance, deposit.currency)}
+                      {filteredLots.map((lot) => (
+                        <option key={lot.id} value={lot.id}>
+                          {lot.received_date} / {lot.payer_name} / {lot.bank} / 残 {formatAmount(lot.remaining_amount, lot.currency)} / 入金R {formatRate(lot.receipt_rate)}
                         </option>
                       ))}
                     </select>
+                    <input name="allocation_deposit_id" type="hidden" value={allocation.depositId} />
                     <input name="allocation_reservation_id" type="hidden" value="" />
-                    {selectedDeposit ? <small>最終使用 {selectedDeposit.last_used_at ? new Date(selectedDeposit.last_used_at).toLocaleDateString("ja-JP") : "-"} / {selectedDeposit.last_used_amount ? formatAmount(selectedDeposit.last_used_amount, selectedDeposit.currency) : "-"}</small> : null}
+                    <label className="nested-field">支払時レート<input min="0" name="allocation_payment_rate" onChange={(event) => updateAllocation(allocation.id, { paymentRate: event.target.value })} required step="0.0001" type="number" value={allocation.paymentRate} /></label>
+                    {selectedLot ? (
+                      <small>
+                        入金時レート {formatRate(selectedLot.receipt_rate)}
+                        {allocation.paymentRate ? ` / 見込差損益 ${Math.round((toNumber(allocation.paymentRate) - toNumber(selectedLot.receipt_rate)) * toNumber(allocation.amount)).toLocaleString("ja-JP")}円` : ""}
+                        {selectedDeposit ? ` / 口座 ${selectedDeposit.account_name}` : ""}
+                      </small>
+                    ) : null}
                   </label>
                 ) : (
                   <>
                     <input name="allocation_reservation_id" type="hidden" value="" />
                     <input name="allocation_deposit_id" type="hidden" value="" />
+                    <input name="allocation_deposit_lot_id" type="hidden" value="" />
+                    <input name="allocation_payment_rate" type="hidden" value="" />
                     <span className="spot-note">銀行レートで決済</span>
                   </>
                 )}

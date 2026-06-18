@@ -553,6 +553,10 @@ th {
   min-width: 0;
 }
 
+.nested-field {
+  margin-top: 8px;
+}
+
 .spot-note {
   align-self: center;
   color: var(--muted);
@@ -587,6 +591,16 @@ th {
 
 .bottom-alert {
   margin: 16px;
+}
+
+.gain {
+  color: var(--success);
+  font-weight: 700;
+}
+
+.loss {
+  color: #b42318;
+  font-weight: 700;
 }
 
 .empty {

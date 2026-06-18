@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { RequestForm } from "@/components/RequestForm";
-import { getCurrentProfile, getForeignDeposits, getFxReservations, getPayees } from "@/lib/queries";
+import { getAvailableForeignDepositLots, getCurrentProfile, getForeignDeposits, getFxReservations, getPayees } from "@/lib/queries";
 import { createClient, getSupabaseConfigIssue } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -46,17 +46,19 @@ export default async function TransferRequestPage() {
     redirect("/login");
   }
 
-  const [payeesResult, reservationsResult, depositsResult] = await Promise.allSettled([
+  const [payeesResult, reservationsResult, depositsResult, lotsResult] = await Promise.allSettled([
     getPayees(),
     getFxReservations(),
-    getForeignDeposits()
+    getForeignDeposits(),
+    getAvailableForeignDepositLots()
   ]);
   const profile = await getCurrentProfile();
 
   const errors = [
     payeesResult.status === "rejected" ? `受取人マスタ: ${payeesResult.reason instanceof Error ? payeesResult.reason.message : String(payeesResult.reason)}` : null,
     reservationsResult.status === "rejected" ? `為替予約: ${reservationsResult.reason instanceof Error ? reservationsResult.reason.message : String(reservationsResult.reason)}` : null,
-    depositsResult.status === "rejected" ? `外貨預金: ${depositsResult.reason instanceof Error ? depositsResult.reason.message : String(depositsResult.reason)}` : null
+    depositsResult.status === "rejected" ? `外貨預金: ${depositsResult.reason instanceof Error ? depositsResult.reason.message : String(depositsResult.reason)}` : null,
+    lotsResult.status === "rejected" ? `売上入金内訳: ${lotsResult.reason instanceof Error ? lotsResult.reason.message : String(lotsResult.reason)}` : null
   ].filter(Boolean);
 
   if (errors.length > 0) {
@@ -82,7 +84,8 @@ export default async function TransferRequestPage() {
   if (
     payeesResult.status !== "fulfilled" ||
     reservationsResult.status !== "fulfilled" ||
-    depositsResult.status !== "fulfilled"
+    depositsResult.status !== "fulfilled" ||
+    lotsResult.status !== "fulfilled"
   ) {
     throw new Error("Supabaseデータの読み込みに失敗しました。");
   }
@@ -90,6 +93,7 @@ export default async function TransferRequestPage() {
   const payees = payeesResult.value;
   const reservations = reservationsResult.value;
   const deposits = depositsResult.value;
+  const lots = lotsResult.value;
 
   if (payees.length === 0) {
     return (
@@ -109,7 +113,7 @@ export default async function TransferRequestPage() {
 
   return (
     <AppShell title="送金申請" description="申請フォームのみを表示します。登録後は履歴ページで確認できます。" role={profile.role}>
-      <RequestForm deposits={deposits} payees={payees} reservations={reservations} />
+      <RequestForm deposits={deposits} lots={lots} payees={payees} reservations={reservations} />
     </AppShell>
   );
 }
