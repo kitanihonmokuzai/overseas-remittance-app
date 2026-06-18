@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Send } from "lucide-react";
 import { createRemittanceRequest } from "@/lib/actions";
+import { SubmitButton } from "@/components/SubmitButton";
 import type { ForeignDepositAccount, FxReservation, Payee } from "@/lib/db";
 import { formatAmount, remaining } from "@/lib/db";
 
@@ -140,7 +141,14 @@ export function RequestForm({
       <label className="memo">備考<textarea name="memo" /></label>
 
       <div className="actions">
-        <button className="primary" type="submit"><Send size={18} />申請登録</button>
+        <SubmitButton
+          className="primary"
+          icon={<Send size={18} />}
+          notice="申請と添付PDFを保存しています。完了後に履歴へ移動します。"
+          pendingLabel="申請登録中..."
+        >
+          申請登録
+        </SubmitButton>
       </div>
     </form>
   );

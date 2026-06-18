@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Save } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { SubmitButton } from "@/components/SubmitButton";
 import { createFxReservation } from "@/lib/actions";
 
 export default function NewFxReservationPage() {
@@ -16,7 +17,16 @@ export default function NewFxReservationPage() {
           <label>レート<input min="0" name="rate" required step="0.01" type="number" /></label>
           <label className="full">期間<input name="period" placeholder="2026/6/1-2026/8/31" /></label>
         </div>
-        <div className="actions"><button className="primary" type="submit"><Save size={18} />登録</button></div>
+        <div className="actions">
+          <SubmitButton
+            className="primary"
+            icon={<Save size={18} />}
+            notice="為替予約を登録し、履歴に反映しています。"
+            pendingLabel="登録中..."
+          >
+            登録
+          </SubmitButton>
+        </div>
       </form>
     </AppShell>
   );

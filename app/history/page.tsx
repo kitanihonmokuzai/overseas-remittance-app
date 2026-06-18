@@ -1,5 +1,6 @@
 import { CheckCircle2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { SubmitButton } from "@/components/SubmitButton";
 import { markRequestPaid } from "@/lib/actions";
 import { formatAmount, formatDate } from "@/lib/db";
 import { getDepositTransactions, getFxRegistrationHistory, getRemittanceRequests } from "@/lib/queries";
@@ -32,7 +33,18 @@ export default async function HistoryPage() {
                   <td>
                     <form action={markRequestPaid}>
                       <input name="request_id" type="hidden" value={request.id} />
-                      <button className="secondary small" disabled={request.status === "支払済"} type="submit"><CheckCircle2 size={16} />支払済</button>
+                      {request.status === "支払済" ? (
+                        <button className="secondary small" disabled type="button"><CheckCircle2 size={16} />支払済</button>
+                      ) : (
+                        <SubmitButton
+                          className="secondary small"
+                          icon={<CheckCircle2 size={16} />}
+                          notice="残高とステータスを更新しています。"
+                          pendingLabel="更新中..."
+                        >
+                          支払済
+                        </SubmitButton>
+                      )}
                     </form>
                   </td>
                 </tr>

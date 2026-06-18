@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ReactNode } from "react";
 import { Database, LogOut } from "lucide-react";
 import { signOut } from "@/lib/actions";
+import { SubmitButton } from "@/components/SubmitButton";
 
 const navItems = [
   { href: "/transfer-request", label: "送金申請" },
@@ -34,7 +35,14 @@ export function AppShell({
           ))}
         </nav>
         <form action={signOut} className="sidebar-footer">
-          <button type="submit"><LogOut size={16} />ログアウト</button>
+          <SubmitButton
+            className="sidebar-button"
+            icon={<LogOut size={16} />}
+            notice="ログアウトしています。"
+            pendingLabel="ログアウト中..."
+          >
+            ログアウト
+          </SubmitButton>
         </form>
       </aside>
 

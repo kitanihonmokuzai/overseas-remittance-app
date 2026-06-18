@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Save } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { SubmitButton } from "@/components/SubmitButton";
 import { createDepositTransaction } from "@/lib/actions";
 import { formatAmount } from "@/lib/db";
 import { getForeignDeposits } from "@/lib/queries";
@@ -27,7 +28,16 @@ export default async function DepositTransactionPage() {
           <label>入金額<input min="1" name="amount" required type="number" /></label>
           <label className="full">備考<input name="memo" /></label>
         </div>
-        <div className="actions"><button className="primary" type="submit"><Save size={18} />入金登録</button></div>
+        <div className="actions">
+          <SubmitButton
+            className="primary"
+            icon={<Save size={18} />}
+            notice="外貨預金口座の残高を更新しています。"
+            pendingLabel="入金登録中..."
+          >
+            入金登録
+          </SubmitButton>
+        </div>
       </form>
     </AppShell>
   );
