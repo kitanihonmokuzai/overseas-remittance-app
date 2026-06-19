@@ -172,26 +172,3 @@ values
   ('Nord Timber GmbH', 'Deutsche Bank AG', 'Hamburg', 'DE89 3704 0044 0532 0130 00', 'Nord Timber GmbH', 'DEUTDEHHXXX', 'Germany', 'Holzstrasse 18, Hamburg', 'EUR'),
   ('Pacific Lumber Inc.', 'Bank of America', 'Seattle', '478203912', 'Pacific Lumber Inc.', 'BOFAUS3N', 'United States', '1201 3rd Ave, Seattle', 'USD')
 on conflict do nothing;
-
-insert into public.fx_reservations (reservation_no, currency, bank, booked_date, original_amount, used_amount, rate, period)
-values
-  ('EUR-001', 'EUR', '三菱UFJ銀行', '2026-05-20', 50000, 12000, 166.42, '2026/6/1-2026/8/31'),
-  ('EUR-016', 'EUR', '三井住友銀行', '2026-06-03', 30000, 5000, 165.88, '2026/6/15-2026/9/30'),
-  ('USD-026', 'USD', '三井住友銀行', '2026-04-12', 40000, 15000, 157.25, '2026/5/1-2026/7/31')
-on conflict (reservation_no) do nothing;
-
-insert into public.foreign_deposit_accounts (bank, currency, balance, account_name)
-select bank, currency, balance, account_name
-from (values
-  ('三菱UFJ銀行', 'EUR', 18500::numeric, '外貨預金口座'),
-  ('三井住友銀行', 'EUR', 12000::numeric, '外貨預金口座'),
-  ('三井住友銀行', 'USD', 22000::numeric, '外貨預金口座'),
-  ('三菱UFJ銀行', 'USD', 9000::numeric, '外貨預金口座')
-) as seed(bank, currency, balance, account_name)
-where not exists (
-  select 1
-  from public.foreign_deposit_accounts existing
-  where existing.bank = seed.bank
-    and existing.currency = seed.currency
-    and existing.account_name = seed.account_name
-);
