@@ -36,7 +36,7 @@ export default async function HistoryPage() {
           <td>{formatDate(request.remittance_date)}</td>
           <td>{request.payee_name}</td>
           <td>{formatAmount(request.amount, request.currency)}</td>
-          <td>{allocationSummary}</td>
+          <td>{allocationSummary}{request.status === "差戻し" && request.reject_reason ? <div className="reject-note">差戻し理由：{request.reject_reason}</div> : null}</td>
           <td>{request.file_count}件</td>
           <td>
             <div className="row-actions">

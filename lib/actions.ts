@@ -389,6 +389,30 @@ export async function approveRequest(formData: FormData) {
   revalidatePath("/history");
 }
 
+export async function rejectRequest(formData: FormData) {
+  const { supabase, user } = await authenticatedClient();
+  await requireOperator(supabase, user.id);
+  const requestId = value(formData, "request_id");
+  const reason = value(formData, "reason");
+  if (!requestId) {
+    throw new Error("申請IDがありません。");
+  }
+  if (!reason) {
+    throw new Error("差戻し理由を入力してください。");
+  }
+
+  // 承認待ちの申請のみ差戻しできる
+  const { error } = await supabase
+    .from("remittance_requests")
+    .update({ status: "差戻し", reject_reason: reason })
+    .eq("id", requestId)
+    .eq("status", "承認待ち");
+  throwIfError(error);
+
+  revalidatePath("/approvals");
+  revalidatePath("/history");
+}
+
 export async function deleteRemittanceRequest(formData: FormData) {
   const { supabase, user } = await authenticatedClient();
   await requireAdmin(supabase, user.id);

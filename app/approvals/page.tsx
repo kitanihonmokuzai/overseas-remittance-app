@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { CheckCircle2, Wallet } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -55,12 +56,15 @@ export default async function ApprovalsPage() {
                     <td>{allocationSummary(request)}</td>
                     <td>{request.file_count}件</td>
                     <td>
-                      <form action={approveRequest}>
-                        <input name="request_id" type="hidden" value={request.id} />
-                        <SubmitButton className="primary small" icon={<CheckCircle2 size={16} />} notice="承認しています。" pendingLabel="承認中...">
-                          承認する
-                        </SubmitButton>
-                      </form>
+                      <div className="row-actions">
+                        <Link className="secondary small" href={`/approvals/${request.id}`}>詳細</Link>
+                        <form action={approveRequest}>
+                          <input name="request_id" type="hidden" value={request.id} />
+                          <SubmitButton className="primary small" icon={<CheckCircle2 size={16} />} notice="承認しています。" pendingLabel="承認中...">
+                            承認する
+                          </SubmitButton>
+                        </form>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -92,12 +96,15 @@ export default async function ApprovalsPage() {
                     <td>{allocationSummary(request)}</td>
                     <td>{request.file_count}件</td>
                     <td>
-                      <form action={markRequestPaid}>
-                        <input name="request_id" type="hidden" value={request.id} />
-                        <SubmitButton className="primary small" icon={<Wallet size={16} />} notice="残高と為替差損益を更新しています。" pendingLabel="支払処理中...">
-                          支払処理
-                        </SubmitButton>
-                      </form>
+                      <div className="row-actions">
+                        <Link className="secondary small" href={`/approvals/${request.id}`}>詳細</Link>
+                        <form action={markRequestPaid}>
+                          <input name="request_id" type="hidden" value={request.id} />
+                          <SubmitButton className="primary small" icon={<Wallet size={16} />} notice="残高と為替差損益を更新しています。" pendingLabel="支払処理中...">
+                            支払処理
+                          </SubmitButton>
+                        </form>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -115,11 +122,11 @@ export default async function ApprovalsPage() {
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>ステータス</th><th>送金日</th><th>受取人</th><th>金額</th><th>決済方法</th></tr>
+              <tr><th>ステータス</th><th>送金日</th><th>受取人</th><th>金額</th><th>決済方法</th><th>詳細</th></tr>
             </thead>
             <tbody>
               {completed.length === 0 ? (
-                <tr><td colSpan={5}>完了した申請はまだありません。</td></tr>
+                <tr><td colSpan={6}>完了した申請はまだありません。</td></tr>
               ) : (
                 completed.map((request) => (
                   <tr key={request.id}>
@@ -128,6 +135,7 @@ export default async function ApprovalsPage() {
                     <td>{request.payee_name}</td>
                     <td>{formatAmount(request.amount, request.currency)}</td>
                     <td>{allocationSummary(request)}</td>
+                    <td><Link className="secondary small" href={`/approvals/${request.id}`}>詳細</Link></td>
                   </tr>
                 ))
               )}

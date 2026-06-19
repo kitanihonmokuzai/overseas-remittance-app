@@ -85,7 +85,8 @@ export type RemittanceRequest = {
   currency: string;
   settlement_method: SettlementMethod | "複合" | null;
   memo: string;
-  status: "承認待ち" | "支払処理待ち" | "完了";
+  status: "承認待ち" | "支払処理待ち" | "完了" | "差戻し";
+  reject_reason?: string;
   created_at: string;
   file_count: number;
   remittance_settlement_allocations?: SettlementAllocation[];
@@ -174,5 +175,33 @@ export function canApprove(role: UserRole) {
 export function statusClass(status: string) {
   if (status === "完了") return "paid";
   if (status === "支払処理待ち") return "pay";
+  if (status === "差戻し") return "reject";
   return "review";
 }
+
+export type RequestBeneficiary = {
+  bankName?: string;
+  branchName?: string;
+  accountNo?: string;
+  accountName?: string;
+  swift?: string;
+  country?: string;
+  address?: string;
+  bankCountry?: string;
+  bankCity?: string;
+  bankStreet?: string;
+  bankPostal?: string;
+  origin?: string;
+  shippingCountry?: string;
+  shippingCity?: string;
+  chargeBearer?: string;
+};
+
+export type RequestFile = { id: string; file_name: string; storage_path: string | null };
+
+export type RemittanceRequestDetail = RemittanceRequest & {
+  memo: string;
+  payee_id?: string | null;
+  beneficiary: RequestBeneficiary;
+  remittance_files?: RequestFile[];
+};

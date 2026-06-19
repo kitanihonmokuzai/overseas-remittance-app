@@ -793,6 +793,46 @@ td { font-size: 13.5px; }
 .status.pay { background: var(--primary-soft); color: var(--primary-dark); }
 .status.pay::before { background: var(--primary); }
 
+.status.reject { background: var(--loss-soft); color: var(--loss); }
+.status.reject::before { background: var(--loss); }
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.detail-item {
+  display: grid;
+  gap: 4px;
+  padding: 11px 14px;
+  background: var(--panel);
+}
+
+.detail-item span {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.detail-item strong { font-size: 13.5px; font-weight: 600; word-break: break-word; }
+
+.file-list { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.file-list li { font-size: 13px; }
+
+.reject-form { display: grid; gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+
+.reject-note { margin-top: 4px; color: var(--loss); font-size: 11.5px; line-height: 1.5; }
+
+@media (max-width: 720px) {
+  .detail-grid { grid-template-columns: 1fr; }
+}
+
 .primary.small { min-height: 34px; padding: 6px 12px; font-size: 12.5px; }
 
 .nav-badge {

@@ -9,6 +9,7 @@ import type {
   FxReservation,
   Payee,
   RemittanceRequest,
+  RemittanceRequestDetail,
   UserProfile,
   UserRole
 } from "@/lib/db";
@@ -148,7 +149,7 @@ export async function getRemittanceRequests() {
   const supabase = await authenticatedClient();
   const { data, error } = await supabase
     .from("remittance_requests")
-    .select("id, remittance_date, payee_name, amount, currency, settlement_method, memo, status, created_at, remittance_files(id), remittance_settlement_allocations(id, request_id, method, reservation_id, foreign_deposit_id, deposit_lot_id, payment_rate, amount)")
+    .select("id, remittance_date, payee_name, amount, currency, settlement_method, memo, status, reject_reason, created_at, remittance_files(id), remittance_settlement_allocations(id, request_id, method, reservation_id, foreign_deposit_id, deposit_lot_id, payment_rate, amount)")
     .order("created_at", { ascending: false });
   throwIfError(error);
 
@@ -166,6 +167,24 @@ export async function getPendingApprovalCount() {
     .eq("status", "承認待ち");
   throwIfError(error);
   return count ?? 0;
+}
+
+export async function getRemittanceRequestById(id: string) {
+  const supabase = await authenticatedClient();
+  const { data, error } = await supabase
+    .from("remittance_requests")
+    .select("id, remittance_date, payee_id, payee_name, amount, currency, settlement_method, memo, status, reject_reason, beneficiary, created_at, remittance_files(id, file_name, storage_path), remittance_settlement_allocations(id, request_id, method, reservation_id, foreign_deposit_id, deposit_lot_id, payment_rate, amount)")
+    .eq("id", id)
+    .maybeSingle();
+  throwIfError(error);
+  if (!data) {
+    return null;
+  }
+  return {
+    ...data,
+    beneficiary: (data.beneficiary ?? {}) as RemittanceRequestDetail["beneficiary"],
+    file_count: Array.isArray(data.remittance_files) ? data.remittance_files.length : 0
+  } as RemittanceRequestDetail;
 }
 
 export async function getFxRegistrationHistory() {
