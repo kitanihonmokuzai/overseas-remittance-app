@@ -790,6 +790,27 @@ td { font-size: 13.5px; }
 .status.paid { background: var(--gain-soft); color: var(--gain); }
 .status.paid::before { background: var(--gain); }
 
+.status.pay { background: var(--primary-soft); color: var(--primary-dark); }
+.status.pay::before { background: var(--primary); }
+
+.primary.small { min-height: 34px; padding: 6px 12px; font-size: 12.5px; }
+
+.nav-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: auto;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--brass);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1;
+}
+
 /* --------------------------------------------------------------- alerts -- */
 
 .form-alert {

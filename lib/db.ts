@@ -85,7 +85,7 @@ export type RemittanceRequest = {
   currency: string;
   settlement_method: SettlementMethod | "複合" | null;
   memo: string;
-  status: "下書き" | "申請中" | "支払済";
+  status: "承認待ち" | "支払処理待ち" | "完了";
   created_at: string;
   file_count: number;
   remittance_settlement_allocations?: SettlementAllocation[];
@@ -165,4 +165,14 @@ export function canOperate(role: UserRole) {
 
 export function canDeleteHistory(role: UserRole) {
   return role === "admin";
+}
+
+export function canApprove(role: UserRole) {
+  return role === "admin" || role === "approver";
+}
+
+export function statusClass(status: string) {
+  if (status === "完了") return "paid";
+  if (status === "支払処理待ち") return "pay";
+  return "review";
 }

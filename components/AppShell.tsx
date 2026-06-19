@@ -3,9 +3,10 @@ import { LogOut } from "lucide-react";
 import { signOut } from "@/lib/actions";
 import { SubmitButton } from "@/components/SubmitButton";
 import { NavLinks } from "@/components/NavLinks";
-import { roleLabel, type UserRole } from "@/lib/db";
+import { getPendingApprovalCount } from "@/lib/queries";
+import { canOperate, roleLabel, type UserRole } from "@/lib/db";
 
-export function AppShell({
+export async function AppShell({
   action,
   children,
   description,
@@ -18,6 +19,8 @@ export function AppShell({
   role?: UserRole;
   title: string;
 }) {
+  const pendingCount = role && canOperate(role) ? await getPendingApprovalCount() : 0;
+
   return (
     <main className="app-shell">
       <aside className="sidebar">
@@ -29,7 +32,7 @@ export function AppShell({
           </div>
         </div>
 
-        <NavLinks role={role} />
+        <NavLinks role={role} pendingCount={pendingCount} />
 
         <form action={signOut} className="sidebar-footer">
           <SubmitButton

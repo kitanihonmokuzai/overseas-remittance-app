@@ -107,7 +107,7 @@ export async function getForeignDeposits() {
   const { data: paidRequests } = await supabase
     .from("remittance_requests")
     .select("id, created_at")
-    .eq("status", "支払済");
+    .eq("status", "完了");
   const requestDates = new Map((paidRequests ?? []).map((request) => [request.id, request.created_at]));
 
   const { data: allocations } = await supabase
@@ -156,6 +156,16 @@ export async function getRemittanceRequests() {
     ...request,
     file_count: Array.isArray(request.remittance_files) ? request.remittance_files.length : 0
   })) as RemittanceRequest[];
+}
+
+export async function getPendingApprovalCount() {
+  const supabase = await authenticatedClient();
+  const { count, error } = await supabase
+    .from("remittance_requests")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "承認待ち");
+  throwIfError(error);
+  return count ?? 0;
 }
 
 export async function getFxRegistrationHistory() {

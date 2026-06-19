@@ -183,7 +183,7 @@ export async function createRemittanceRequest(formData: FormData) {
       foreign_deposit_id: allocations.find((allocation) => allocation.method === "外貨預金")?.foreign_deposit_id ?? null,
       memo,
       beneficiary,
-      status: "申請中",
+      status: "承認待ち",
       created_by: user.id
     })
     .select("id")
@@ -363,9 +363,30 @@ export async function markRequestPaid(formData: FormData) {
   const { error } = await supabase.rpc("mark_request_paid", { p_request_id: requestId });
   throwIfError(error);
 
+  revalidatePath("/approvals");
   revalidatePath("/history");
   revalidatePath("/fx-reservations");
   revalidatePath("/foreign-deposits");
+}
+
+export async function approveRequest(formData: FormData) {
+  const { supabase, user } = await authenticatedClient();
+  await requireOperator(supabase, user.id);
+  const requestId = value(formData, "request_id");
+  if (!requestId) {
+    throw new Error("申請IDがありません。");
+  }
+
+  // 承認待ちの申請のみ「支払処理待ち」へ進める（多重承認を防ぐため status を条件に含める）
+  const { error } = await supabase
+    .from("remittance_requests")
+    .update({ status: "支払処理待ち" })
+    .eq("id", requestId)
+    .eq("status", "承認待ち");
+  throwIfError(error);
+
+  revalidatePath("/approvals");
+  revalidatePath("/history");
 }
 
 export async function deleteRemittanceRequest(formData: FormData) {

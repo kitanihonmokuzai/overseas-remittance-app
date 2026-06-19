@@ -1,8 +1,8 @@
-import { CheckCircle2, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { SubmitButton } from "@/components/SubmitButton";
-import { deleteRemittanceRequest, markRequestPaid } from "@/lib/actions";
-import { canDeleteHistory, canOperate, formatAmount, formatDate, formatRate } from "@/lib/db";
+import { deleteRemittanceRequest } from "@/lib/actions";
+import { canDeleteHistory, formatAmount, formatDate, formatRate, statusClass } from "@/lib/db";
 import { getCurrentProfile, getDepositTransactions, getFxGainLossHistory, getFxRegistrationHistory, getRemittanceRequests } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +32,7 @@ export default async function HistoryPage() {
 
       return (
         <tr key={request.id}>
-          <td><span className={`status ${request.status === "支払済" ? "paid" : ""}`}>{request.status}</span></td>
+          <td><span className={`status ${statusClass(request.status)}`}>{request.status}</span></td>
           <td>{formatDate(request.remittance_date)}</td>
           <td>{request.payee_name}</td>
           <td>{formatAmount(request.amount, request.currency)}</td>
@@ -40,18 +40,6 @@ export default async function HistoryPage() {
           <td>{request.file_count}件</td>
           <td>
             <div className="row-actions">
-              {canOperate(profile.role) ? (
-                <form action={markRequestPaid}>
-                  <input name="request_id" type="hidden" value={request.id} />
-                  {request.status === "支払済" ? (
-                    <button className="secondary small" disabled type="button"><CheckCircle2 size={16} />支払済</button>
-                  ) : (
-                    <SubmitButton className="secondary small" icon={<CheckCircle2 size={16} />} notice="残高とステータスを更新しています。" pendingLabel="更新中...">
-                      支払済
-                    </SubmitButton>
-                  )}
-                </form>
-              ) : null}
               {canDeleteHistory(profile.role) ? (
                 <form action={deleteRemittanceRequest}>
                   <input name="request_id" type="hidden" value={request.id} />
@@ -59,7 +47,9 @@ export default async function HistoryPage() {
                     削除
                   </SubmitButton>
                 </form>
-              ) : null}
+              ) : (
+                <span className="empty">-</span>
+              )}
             </div>
           </td>
         </tr>
