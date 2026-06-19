@@ -19,8 +19,8 @@ export default async function NewFxReservationPage() {
         <div className="form-grid">
           <label>予約No<input name="reservation_no" required /></label>
           <label>予約日<input name="booked_date" required type="date" /></label>
-          <label>銀行<select name="bank"><option>三菱UFJ銀行</option><option>三井住友銀行</option><option>みずほ銀行</option></select></label>
-          <label>通貨<select name="currency"><option>EUR</option><option>USD</option><option>GBP</option></select></label>
+          <label>銀行<select name="bank"><option>北海道銀行</option><option>北洋銀行</option><option>秋田銀行</option></select></label>
+          <label>通貨<select name="currency"><option>EUR</option><option>USD</option></select></label>
           <label>予約額<input min="1" name="original_amount" required type="number" /></label>
           <label>レート<input min="0" name="rate" required step="0.01" type="number" /></label>
           <label className="full">期間<input name="period" placeholder="2026/6/1-2026/8/31" /></label>
