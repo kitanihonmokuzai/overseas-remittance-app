@@ -18,7 +18,7 @@ export function NavLinks({ role, pendingCount = 0 }: { role?: UserRole; pendingC
 
   const items = baseItems
     .filter((item) => !item.operatorOnly || isOperator)
-    .concat(role === "admin" ? [{ href: "/admin/users", label: "ユーザー管理" }] : []);
+    .concat(role === "admin" ? [{ href: "/audit", label: "監査ログ" }, { href: "/admin/users", label: "ユーザー管理" }] : []);
 
   return (
     <nav>

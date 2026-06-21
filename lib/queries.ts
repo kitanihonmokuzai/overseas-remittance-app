@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type {
+  AttachmentLink,
+  AuditEntry,
   DepositTransaction,
   ForeignDepositLot,
   ForeignDepositAccount,
@@ -185,6 +187,46 @@ export async function getRemittanceRequestById(id: string) {
     beneficiary: (data.beneficiary ?? {}) as RemittanceRequestDetail["beneficiary"],
     file_count: Array.isArray(data.remittance_files) ? data.remittance_files.length : 0
   } as RemittanceRequestDetail;
+}
+
+export async function getRequestAuditLog(requestId: string) {
+  const supabase = await authenticatedClient();
+  const { data, error } = await supabase
+    .from("remittance_audit_log")
+    .select("id, request_id, action, actor_email, note, created_at")
+    .eq("request_id", requestId)
+    .order("created_at", { ascending: true });
+  throwIfError(error);
+  return (data ?? []) as AuditEntry[];
+}
+
+export async function getAttachmentLinks(
+  files: { id: string; file_name: string; storage_path: string | null }[]
+): Promise<AttachmentLink[]> {
+  const supabase = await authenticatedClient();
+  const links: AttachmentLink[] = [];
+  for (const file of files) {
+    if (!file.storage_path) {
+      links.push({ id: file.id, file_name: file.file_name, url: null });
+      continue;
+    }
+    const { data } = await supabase.storage
+      .from("remittance-files")
+      .createSignedUrl(file.storage_path, 600);
+    links.push({ id: file.id, file_name: file.file_name, url: data?.signedUrl ?? null });
+  }
+  return links;
+}
+
+export async function getAuditLog(limit = 100) {
+  const supabase = await authenticatedClient();
+  const { data, error } = await supabase
+    .from("remittance_audit_log")
+    .select("id, request_id, action, actor_email, note, created_at, remittance_requests(payee_name, amount, currency)")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  throwIfError(error);
+  return data ?? [];
 }
 
 export async function getFxRegistrationHistory() {

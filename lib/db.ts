@@ -199,6 +199,17 @@ export type RequestBeneficiary = {
 
 export type RequestFile = { id: string; file_name: string; storage_path: string | null };
 
+export type AttachmentLink = { id: string; file_name: string; url: string | null };
+
+export type AuditEntry = {
+  id: string;
+  request_id: string;
+  action: string;
+  actor_email: string;
+  note: string;
+  created_at: string;
+};
+
 export type RemittanceRequestDetail = RemittanceRequest & {
   memo: string;
   payee_id?: string | null;

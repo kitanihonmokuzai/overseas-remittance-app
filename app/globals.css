@@ -825,6 +825,29 @@ td { font-size: 13.5px; }
 .file-list { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
 .file-list li { font-size: 13px; }
 
+.file-list.download { padding-left: 0; list-style: none; gap: 6px; }
+.file-list.download a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 500;
+}
+.file-list.download a:hover { text-decoration: underline; }
+
+.save-attachments { display: grid; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.save-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.save-note { margin: 0; color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+.save-message {
+  margin: 0;
+  color: var(--primary-dark);
+  background: var(--primary-soft);
+  border-radius: var(--radius-sm);
+  padding: 8px 11px;
+  font-size: 12.5px;
+}
+
 .reject-form { display: grid; gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
 
 .reject-note { margin-top: 4px; color: var(--loss); font-size: 11.5px; line-height: 1.5; }

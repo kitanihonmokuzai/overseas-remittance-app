@@ -32,6 +32,20 @@ function throwIfError(error: { message: string } | null) {
   }
 }
 
+async function logAudit(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  params: { requestId: string; action: string; actorId: string; actorEmail: string; note?: string }
+) {
+  // 監査ログは記録できなくても本処理は止めない（ベストエフォート）
+  await supabase.from("remittance_audit_log").insert({
+    request_id: params.requestId,
+    action: params.action,
+    actor_id: params.actorId,
+    actor_email: params.actorEmail,
+    note: params.note ?? ""
+  });
+}
+
 async function currentRole(supabase: Awaited<ReturnType<typeof createClient>>, userId: string): Promise<UserRole> {
   const { data, error } = await supabase
     .from("profiles")
@@ -237,6 +251,8 @@ export async function createRemittanceRequest(formData: FormData) {
     throwIfError(fileError);
   }
 
+  await logAudit(supabase, { requestId, action: "申請", actorId: user.id, actorEmail: user.email ?? "" });
+
   revalidatePath("/history");
   redirect("/history");
 }
@@ -363,6 +379,8 @@ export async function markRequestPaid(formData: FormData) {
   const { error } = await supabase.rpc("mark_request_paid", { p_request_id: requestId });
   throwIfError(error);
 
+  await logAudit(supabase, { requestId, action: "支払処理", actorId: user.id, actorEmail: user.email ?? "" });
+
   revalidatePath("/approvals");
   revalidatePath("/history");
   revalidatePath("/fx-reservations");
@@ -384,6 +402,8 @@ export async function approveRequest(formData: FormData) {
     .eq("id", requestId)
     .eq("status", "承認待ち");
   throwIfError(error);
+
+  await logAudit(supabase, { requestId, action: "承認", actorId: user.id, actorEmail: user.email ?? "" });
 
   revalidatePath("/approvals");
   revalidatePath("/history");
@@ -408,6 +428,8 @@ export async function rejectRequest(formData: FormData) {
     .eq("id", requestId)
     .eq("status", "承認待ち");
   throwIfError(error);
+
+  await logAudit(supabase, { requestId, action: "差戻し", actorId: user.id, actorEmail: user.email ?? "", note: reason });
 
   revalidatePath("/approvals");
   revalidatePath("/history");

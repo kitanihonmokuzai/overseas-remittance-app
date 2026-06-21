@@ -1,11 +1,17 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { CheckCircle2, RotateCcw, Wallet } from "lucide-react";
+import { CheckCircle2, Download, RotateCcw, Wallet } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { SubmitButton } from "@/components/SubmitButton";
+import { SaveAttachments } from "@/components/SaveAttachments";
 import { approveRequest, markRequestPaid, rejectRequest } from "@/lib/actions";
 import { canOperate, formatAmount, formatDate, formatRate, statusClass } from "@/lib/db";
-import { getCurrentProfile, getRemittanceRequestById } from "@/lib/queries";
+import {
+  getAttachmentLinks,
+  getCurrentProfile,
+  getRemittanceRequestById,
+  getRequestAuditLog
+} from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +38,8 @@ export default async function RequestDetailPage({ params }: { params: Promise<{ 
 
   const b = request.beneficiary ?? {};
   const allocations = request.remittance_settlement_allocations ?? [];
+  const attachments = await getAttachmentLinks(request.remittance_files ?? []);
+  const auditLog = await getRequestAuditLog(request.id);
 
   return (
     <AppShell
@@ -114,16 +122,50 @@ export default async function RequestDetailPage({ params }: { params: Promise<{ 
         </section>
 
         <section className="document-section">
-          <h3>添付ファイル</h3>
-          {request.remittance_files && request.remittance_files.length > 0 ? (
-            <ul className="file-list">
-              {request.remittance_files.map((file) => (
-                <li key={file.id}>{file.file_name}</li>
-              ))}
-            </ul>
+          <h3>添付ファイル（銀行提出用）</h3>
+          {attachments.length > 0 ? (
+            <>
+              <ul className="file-list download">
+                {attachments.map((file) => (
+                  <li key={file.id}>
+                    {file.url ? (
+                      <a href={file.url} target="_blank" rel="noreferrer" download={file.file_name}>
+                        <Download size={15} />{file.file_name}
+                      </a>
+                    ) : (
+                      <span>{file.file_name}（リンク生成不可）</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <SaveAttachments files={attachments} />
+            </>
           ) : (
             <p className="empty">添付はありません。</p>
           )}
+        </section>
+
+        <section className="document-section">
+          <h3>操作履歴（監査）</h3>
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>操作</th><th>担当者</th><th>日時</th><th>メモ</th></tr></thead>
+              <tbody>
+                {auditLog.length === 0 ? (
+                  <tr><td colSpan={4}>記録はまだありません。</td></tr>
+                ) : (
+                  auditLog.map((entry) => (
+                    <tr key={entry.id}>
+                      <td><span className={`status ${statusClass(entry.action === "支払処理" ? "完了" : entry.action === "承認" ? "支払処理待ち" : entry.action === "差戻し" ? "差戻し" : "承認待ち")}`}>{entry.action}</span></td>
+                      <td>{entry.actor_email || "-"}</td>
+                      <td>{new Date(entry.created_at).toLocaleString("ja-JP")}</td>
+                      <td>{entry.note || "-"}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </section>
 
         {request.status === "承認待ち" ? (
