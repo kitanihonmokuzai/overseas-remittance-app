@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { UserRole } from "@/lib/db";
 
 const baseItems = [
+  { href: "/dashboard", label: "ダッシュボード" },
   { href: "/transfer-request", label: "送金申請" },
   { href: "/approvals", label: "承認・支払", operatorOnly: true },
   { href: "/fx-reservations", label: "為替予約" },
