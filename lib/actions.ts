@@ -45,6 +45,34 @@ async function logAudit(
   });
 }
 
+async function notify(params: { to: string[]; subject: string; body: string }) {
+  const url = process.env.NOTIFY_WEBHOOK_URL;
+  const recipients = Array.from(new Set(params.to.filter(Boolean)));
+  if (!url || recipients.length === 0) {
+    return;
+  }
+  try {
+    // メール送信は GAS Web App に委譲。失敗しても本処理は止めない。
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        secret: process.env.NOTIFY_WEBHOOK_SECRET ?? "",
+        to: recipients,
+        subject: params.subject,
+        body: params.body
+      })
+    });
+  } catch {
+    /* 通知失敗は無視 */
+  }
+}
+
+async function operatorEmails(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const { data } = await supabase.from("profiles").select("email").in("role", ["approver", "admin"]);
+  return (data ?? []).map((row) => row.email as string).filter(Boolean);
+}
+
 async function insertAttachmentRows(
   supabase: Awaited<ReturnType<typeof createClient>>,
   requestId: string,
@@ -286,6 +314,16 @@ export async function createRemittanceRequest(formData: FormData) {
 
   await logAudit(supabase, { requestId, action: "申請", actorId: user.id, actorEmail: user.email ?? "" });
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  await notify({
+    to: await operatorEmails(supabase),
+    subject: `【海外送金】新規申請 ${payeeName}`,
+    body:
+      `新しい送金申請が登録され、承認待ちです。\n\n` +
+      `受取人: ${payeeName}\n金額: ${currency} ${amount.toLocaleString("ja-JP")}\n送金日: ${remittanceDate}\n申請者: ${user.email ?? ""}\n` +
+      (appUrl ? `\n承認はこちら: ${appUrl}/approvals` : "")
+  });
+
   revalidatePath("/history");
   redirect("/history");
 }
@@ -480,6 +518,29 @@ export async function markRequestPaid(formData: FormData) {
   throwIfError(error);
 
   await logAudit(supabase, { requestId, action: "支払処理", actorId: user.id, actorEmail: user.email ?? "" });
+
+  // 申請者へ完了通知
+  const { data: paidRequest } = await supabase
+    .from("remittance_requests")
+    .select("created_by, payee_name, amount, currency")
+    .eq("id", requestId)
+    .maybeSingle();
+  if (paidRequest?.created_by) {
+    const { data: creator } = await supabase
+      .from("profiles")
+      .select("email")
+      .eq("id", paidRequest.created_by)
+      .maybeSingle();
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+    await notify({
+      to: creator?.email ? [creator.email] : [],
+      subject: `【海外送金】支払完了 ${paidRequest.payee_name ?? ""}`,
+      body:
+        `送金の支払処理が完了しました。\n\n` +
+        `受取人: ${paidRequest.payee_name ?? ""}\n金額: ${paidRequest.currency ?? ""} ${Number(paidRequest.amount ?? 0).toLocaleString("ja-JP")}\n` +
+        (appUrl ? `\n履歴はこちら: ${appUrl}/history` : "")
+    });
+  }
 
   revalidatePath("/approvals");
   revalidatePath("/history");
