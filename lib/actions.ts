@@ -104,7 +104,7 @@ export async function signIn(formData: FormData) {
     throw new Error(error.message);
   }
 
-  redirect("/transfer-request");
+  redirect("/dashboard");
 }
 
 export async function signUp(formData: FormData) {
@@ -117,7 +117,7 @@ export async function signUp(formData: FormData) {
     throw new Error(error.message);
   }
 
-  redirect("/transfer-request");
+  redirect("/dashboard");
 }
 
 export async function signOut() {
