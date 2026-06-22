@@ -87,6 +87,7 @@ export type RemittanceRequest = {
   memo: string;
   status: "承認待ち" | "支払処理待ち" | "完了" | "差戻し";
   reject_reason?: string;
+  created_by?: string | null;
   created_at: string;
   file_count: number;
   remittance_settlement_allocations?: SettlementAllocation[];
@@ -213,6 +214,7 @@ export type AuditEntry = {
 export type RemittanceRequestDetail = RemittanceRequest & {
   memo: string;
   payee_id?: string | null;
+  created_by?: string | null;
   beneficiary: RequestBeneficiary;
   remittance_files?: RequestFile[];
 };

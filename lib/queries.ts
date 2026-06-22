@@ -161,6 +161,54 @@ export async function getRemittanceRequests() {
   })) as RemittanceRequest[];
 }
 
+export async function getRemittanceRequestsPage(options: {
+  status?: string;
+  payee?: string;
+  month?: string;
+  page?: number;
+  pageSize?: number;
+}) {
+  const supabase = await authenticatedClient();
+  const pageSize = options.pageSize ?? 50;
+  const page = Math.max(1, options.page ?? 1);
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let query = supabase
+    .from("remittance_requests")
+    .select(
+      "id, remittance_date, payee_name, amount, currency, settlement_method, memo, status, reject_reason, created_by, created_at, remittance_files(id), remittance_settlement_allocations(id, request_id, method, reservation_id, foreign_deposit_id, deposit_lot_id, payment_rate, amount)",
+      { count: "exact" }
+    )
+    .order("created_at", { ascending: false });
+
+  if (options.status) {
+    query = query.eq("status", options.status);
+  }
+  if (options.payee) {
+    query = query.ilike("payee_name", `%${options.payee}%`);
+  }
+  if (options.month && /^\d{4}-\d{2}$/.test(options.month)) {
+    const [year, mon] = options.month.split("-").map(Number);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const start = `${year}-${pad(mon)}-01`;
+    const endYear = mon === 12 ? year + 1 : year;
+    const endMon = mon === 12 ? 1 : mon + 1;
+    const end = `${endYear}-${pad(endMon)}-01`;
+    query = query.gte("remittance_date", start).lt("remittance_date", end);
+  }
+
+  const { data, error, count } = await query.range(from, to);
+  throwIfError(error);
+
+  const rows = (data ?? []).map((request) => ({
+    ...request,
+    file_count: Array.isArray(request.remittance_files) ? request.remittance_files.length : 0
+  })) as RemittanceRequest[];
+
+  return { rows, total: count ?? 0, page, pageSize };
+}
+
 export async function getPendingApprovalCount() {
   const supabase = await authenticatedClient();
   const { count, error } = await supabase
@@ -175,7 +223,7 @@ export async function getRemittanceRequestById(id: string) {
   const supabase = await authenticatedClient();
   const { data, error } = await supabase
     .from("remittance_requests")
-    .select("id, remittance_date, payee_id, payee_name, amount, currency, settlement_method, memo, status, reject_reason, beneficiary, created_at, remittance_files(id, file_name, storage_path), remittance_settlement_allocations(id, request_id, method, reservation_id, foreign_deposit_id, deposit_lot_id, payment_rate, amount)")
+    .select("id, remittance_date, payee_id, payee_name, amount, currency, settlement_method, memo, status, reject_reason, beneficiary, created_by, created_at, remittance_files(id, file_name, storage_path), remittance_settlement_allocations(id, request_id, method, reservation_id, foreign_deposit_id, deposit_lot_id, payment_rate, amount)")
     .eq("id", id)
     .maybeSingle();
   throwIfError(error);

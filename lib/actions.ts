@@ -1,6 +1,5 @@
 "use server";
 
-import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -44,6 +43,56 @@ async function logAudit(
     actor_email: params.actorEmail,
     note: params.note ?? ""
   });
+}
+
+async function insertAttachmentRows(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  requestId: string,
+  formData: FormData
+) {
+  const names = formData.getAll("attachment_name").map((item) => String(item));
+  const paths = formData.getAll("attachment_path").map((item) => String(item));
+  for (let i = 0; i < paths.length; i += 1) {
+    if (!paths[i]) continue;
+    const { error } = await supabase.from("remittance_files").insert({
+      request_id: requestId,
+      file_name: names[i] || "添付ファイル",
+      storage_path: paths[i]
+    });
+    throwIfError(error);
+  }
+}
+
+function buildBeneficiary(formData: FormData) {
+  return {
+    bankName: value(formData, "bank_name"),
+    branchName: value(formData, "branch_name"),
+    accountNo: value(formData, "account_no"),
+    accountName: value(formData, "account_name"),
+    swift: value(formData, "swift"),
+    country: value(formData, "country"),
+    address: value(formData, "address"),
+    bankCountry: value(formData, "bank_country"),
+    bankCity: value(formData, "bank_city"),
+    bankStreet: value(formData, "bank_street"),
+    bankPostal: value(formData, "bank_postal"),
+    origin: value(formData, "origin"),
+    shippingCountry: value(formData, "shipping_country"),
+    shippingCity: value(formData, "shipping_city"),
+    chargeBearer: value(formData, "charge_bearer")
+  };
+}
+
+function allocationRows(requestId: string, allocations: ReturnType<typeof collectSettlementAllocations>) {
+  return allocations.map((allocation) => ({
+    request_id: requestId,
+    method: allocation.method,
+    reservation_id: allocation.method === "為替予約" ? allocation.reservation_id : null,
+    foreign_deposit_id: allocation.method === "外貨預金" ? allocation.foreign_deposit_id : null,
+    deposit_lot_id: allocation.method === "外貨預金" ? allocation.deposit_lot_id : null,
+    payment_rate: allocation.method === "外貨預金" ? allocation.payment_rate : null,
+    amount: allocation.amount
+  }));
 }
 
 async function currentRole(supabase: Awaited<ReturnType<typeof createClient>>, userId: string): Promise<UserRole> {
@@ -231,29 +280,80 @@ export async function createRemittanceRequest(formData: FormData) {
     throwIfError(error);
   }
 
-  const files = formData
-    .getAll("attachments")
-    .filter((item): item is File => item instanceof File && item.size > 0);
-
-  for (const file of files) {
-    const storagePath = `${user.id}/${requestId}/${randomUUID()}-${file.name}`;
-    const { error: uploadError } = await supabase.storage.from("remittance-files").upload(storagePath, file, {
-      contentType: file.type || "application/pdf",
-      upsert: false
-    });
-    throwIfError(uploadError);
-
-    const { error: fileError } = await supabase.from("remittance_files").insert({
-      request_id: requestId,
-      file_name: file.name,
-      storage_path: storagePath
-    });
-    throwIfError(fileError);
-  }
+  // 添付はクライアントから Storage へ直接アップロード済み。ここではメタdata のみ登録する
+  // （Vercel の Server Action 本文サイズ上限を回避）。
+  await insertAttachmentRows(supabase, requestId, formData);
 
   await logAudit(supabase, { requestId, action: "申請", actorId: user.id, actorEmail: user.email ?? "" });
 
   revalidatePath("/history");
+  redirect("/history");
+}
+
+export async function updateRemittanceRequest(formData: FormData) {
+  const { supabase, user } = await authenticatedClient();
+  const requestId = value(formData, "request_id");
+  if (!requestId) {
+    throw new Error("申請IDがありません。");
+  }
+
+  const allocations = collectSettlementAllocations(formData);
+  const remittanceDate = value(formData, "remittance_date");
+  const payeeId = value(formData, "payee_id");
+  const payeeName = value(formData, "payee_name");
+  const amount = numberValue(formData, "amount");
+  const currency = value(formData, "currency");
+  const settlementMethod = allocations[0]?.method ?? "スポット";
+  const memo = value(formData, "memo");
+  const beneficiary = buildBeneficiary(formData);
+
+  // 1) 古い決済明細を削除（差戻し中の自分の申請のみ RLS で許可）
+  const { error: deleteError } = await supabase
+    .from("remittance_settlement_allocations")
+    .delete()
+    .eq("request_id", requestId);
+  throwIfError(deleteError);
+
+  // 2) 新しい決済明細を登録
+  if (allocations.length > 0) {
+    const { error: insertError } = await supabase
+      .from("remittance_settlement_allocations")
+      .insert(allocationRows(requestId, allocations));
+    throwIfError(insertError);
+  }
+
+  // 3) 申請本体を更新して「承認待ち」へ戻す（本人・差戻しのみ）
+  const { data: updated, error: updateError } = await supabase
+    .from("remittance_requests")
+    .update({
+      remittance_date: remittanceDate,
+      payee_id: payeeId || null,
+      payee_name: payeeName,
+      amount,
+      currency,
+      settlement_method: settlementMethod,
+      foreign_deposit_id: allocations.find((allocation) => allocation.method === "外貨預金")?.foreign_deposit_id ?? null,
+      memo,
+      beneficiary,
+      status: "承認待ち",
+      reject_reason: ""
+    })
+    .eq("id", requestId)
+    .eq("created_by", user.id)
+    .eq("status", "差戻し")
+    .select("id");
+  throwIfError(updateError);
+  if (!updated || updated.length === 0) {
+    throw new Error("再申請できませんでした。差戻し状態のご自身の申請のみ編集できます。");
+  }
+
+  // 4) 追加の添付（あれば）
+  await insertAttachmentRows(supabase, requestId, formData);
+
+  await logAudit(supabase, { requestId, action: "再申請", actorId: user.id, actorEmail: user.email ?? "" });
+
+  revalidatePath("/history");
+  revalidatePath("/approvals");
   redirect("/history");
 }
 

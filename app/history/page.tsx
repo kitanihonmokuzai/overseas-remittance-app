@@ -1,22 +1,42 @@
-import { Trash2 } from "lucide-react";
+import Link from "next/link";
+import { Pencil, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { SubmitButton } from "@/components/SubmitButton";
 import { deleteRemittanceRequest } from "@/lib/actions";
 import { canDeleteHistory, formatAmount, formatDate, formatRate, statusClass } from "@/lib/db";
-import { getCurrentProfile, getDepositTransactions, getFxGainLossHistory, getFxRegistrationHistory, getRemittanceRequests } from "@/lib/queries";
+import {
+  getCurrentProfile,
+  getDepositTransactions,
+  getFxGainLossHistory,
+  getFxRegistrationHistory,
+  getRemittanceRequestsPage
+} from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
-export default async function HistoryPage() {
-  const [requests, fxHistory, depositHistory, gainLossHistory] = await Promise.all([
-    getRemittanceRequests(),
+const STATUS_OPTIONS = ["承認待ち", "支払処理待ち", "完了", "差戻し"];
+
+export default async function HistoryPage({
+  searchParams
+}: {
+  searchParams: Promise<{ status?: string; payee?: string; month?: string; page?: string }>;
+}) {
+  const params = await searchParams;
+  const page = Number(params.page) > 0 ? Number(params.page) : 1;
+  const status = params.status ?? "";
+  const payee = params.payee ?? "";
+  const month = params.month ?? "";
+
+  const [requestPage, fxHistory, depositHistory, gainLossHistory, profile] = await Promise.all([
+    getRemittanceRequestsPage({ status, payee, month, page }),
     getFxRegistrationHistory(),
     getDepositTransactions(),
-    getFxGainLossHistory()
+    getFxGainLossHistory(),
+    getCurrentProfile()
   ]);
-  const profile = await getCurrentProfile();
-  const visibleRequests = requests.slice(0, 3);
-  const hiddenRequests = requests.slice(3);
+
+  const requests = requestPage.rows;
+  const totalPages = Math.max(1, Math.ceil(requestPage.total / requestPage.pageSize));
   const visibleFxHistory = fxHistory.slice(0, 3);
   const hiddenFxHistory = fxHistory.slice(3);
   const visibleDepositHistory = depositHistory.slice(0, 3);
@@ -24,57 +44,86 @@ export default async function HistoryPage() {
   const visibleGainLossHistory = gainLossHistory.slice(0, 3);
   const hiddenGainLossHistory = gainLossHistory.slice(3);
 
-  function requestRows(items: typeof requests) {
-    return items.map((request) => {
-      const allocationSummary = request.remittance_settlement_allocations?.length
-        ? request.remittance_settlement_allocations.map((allocation) => `${allocation.method} ${formatAmount(allocation.amount, request.currency)}`).join(" / ")
-        : request.settlement_method ?? "-";
-
-      return (
-        <tr key={request.id}>
-          <td><span className={`status ${statusClass(request.status)}`}>{request.status}</span></td>
-          <td>{formatDate(request.remittance_date)}</td>
-          <td>{request.payee_name}</td>
-          <td>{formatAmount(request.amount, request.currency)}</td>
-          <td>{allocationSummary}{request.status === "差戻し" && request.reject_reason ? <div className="reject-note">差戻し理由：{request.reject_reason}</div> : null}</td>
-          <td>{request.file_count}件</td>
-          <td>
-            <div className="row-actions">
-              {canDeleteHistory(profile.role) ? (
-                <form action={deleteRemittanceRequest}>
-                  <input name="request_id" type="hidden" value={request.id} />
-                  <SubmitButton className="secondary small danger" icon={<Trash2 size={16} />} notice="履歴を削除しています。" pendingLabel="削除中...">
-                    削除
-                  </SubmitButton>
-                </form>
-              ) : (
-                <span className="empty">-</span>
-              )}
-            </div>
-          </td>
-        </tr>
-      );
-    });
+  function pageHref(targetPage: number) {
+    const query = new URLSearchParams();
+    if (status) query.set("status", status);
+    if (payee) query.set("payee", payee);
+    if (month) query.set("month", month);
+    query.set("page", String(targetPage));
+    return `/history?${query.toString()}`;
   }
 
   return (
     <AppShell title="履歴" description="過去の申請、為替予約登録、外貨預金入金を一覧で確認します。" role={profile.role}>
       <section className="panel history-section">
-        <div className="panel-head"><h2>送金申請履歴</h2><span>{requests.length}件</span></div>
+        <div className="panel-head"><h2>送金申請履歴</h2><span>{requestPage.total}件</span></div>
+
+        <form className="filter-bar" method="get">
+          <label>
+            ステータス
+            <select name="status" defaultValue={status}>
+              <option value="">すべて</option>
+              {STATUS_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
+          </label>
+          <label>受取人<input name="payee" defaultValue={payee} placeholder="名称の一部" /></label>
+          <label>送金月<input name="month" type="month" defaultValue={month} /></label>
+          <button className="secondary small" type="submit">絞り込み</button>
+          <Link className="secondary small" href="/history">クリア</Link>
+        </form>
+
         <div className="table-wrap">
           <table>
             <thead><tr><th>ステータス</th><th>送金日</th><th>受取人</th><th>金額</th><th>決済方法</th><th>添付</th><th>操作</th></tr></thead>
             <tbody>
-              {requests.length === 0 ? <tr><td colSpan={7}>申請履歴はまだありません。</td></tr> : requestRows(visibleRequests)}
+              {requests.length === 0 ? (
+                <tr><td colSpan={7}>該当する申請はありません。</td></tr>
+              ) : (
+                requests.map((request) => {
+                  const allocationSummary = request.remittance_settlement_allocations?.length
+                    ? request.remittance_settlement_allocations.map((allocation) => `${allocation.method} ${formatAmount(allocation.amount, request.currency)}`).join(" / ")
+                    : request.settlement_method ?? "-";
+                  const canResubmit = request.status === "差戻し" && request.created_by === profile.id;
+
+                  return (
+                    <tr key={request.id}>
+                      <td><span className={`status ${statusClass(request.status)}`}>{request.status}</span></td>
+                      <td>{formatDate(request.remittance_date)}</td>
+                      <td>{request.payee_name}</td>
+                      <td>{formatAmount(request.amount, request.currency)}</td>
+                      <td>{allocationSummary}{request.status === "差戻し" && request.reject_reason ? <div className="reject-note">差戻し理由：{request.reject_reason}</div> : null}</td>
+                      <td>{request.file_count}件</td>
+                      <td>
+                        <div className="row-actions">
+                          {canResubmit ? (
+                            <Link className="secondary small" href={`/transfer-request/${request.id}/edit`}><Pencil size={15} />修正・再申請</Link>
+                          ) : null}
+                          {canDeleteHistory(profile.role) ? (
+                            <form action={deleteRemittanceRequest}>
+                              <input name="request_id" type="hidden" value={request.id} />
+                              <SubmitButton className="secondary small danger" icon={<Trash2 size={16} />} notice="履歴を削除しています。" pendingLabel="削除中...">
+                                削除
+                              </SubmitButton>
+                            </form>
+                          ) : null}
+                          {!canResubmit && !canDeleteHistory(profile.role) ? <span className="empty">-</span> : null}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
-          {hiddenRequests.length > 0 ? (
-            <details className="history-more">
-              <summary>残り{hiddenRequests.length}件を表示</summary>
-              <table><tbody>{requestRows(hiddenRequests)}</tbody></table>
-            </details>
-          ) : null}
         </div>
+
+        {totalPages > 1 ? (
+          <div className="pager">
+            {page > 1 ? <Link className="secondary small" href={pageHref(page - 1)}>前へ</Link> : <span className="secondary small disabled">前へ</span>}
+            <span className="pager-info">{page} / {totalPages}</span>
+            {page < totalPages ? <Link className="secondary small" href={pageHref(page + 1)}>次へ</Link> : <span className="secondary small disabled">次へ</span>}
+          </div>
+        ) : null}
       </section>
 
       <section className="panel history-section">

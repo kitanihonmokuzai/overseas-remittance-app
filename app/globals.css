@@ -906,6 +906,23 @@ td { font-size: 13.5px; }
 
 .reject-note { margin-top: 4px; color: var(--loss); font-size: 11.5px; line-height: 1.5; }
 
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--sunken);
+}
+.filter-bar label { gap: 6px; }
+.filter-bar input, .filter-bar select { min-height: 38px; width: auto; }
+.filter-bar input[name="payee"] { min-width: 160px; }
+
+.pager { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 16px; }
+.pager-info { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.secondary.disabled { opacity: 0.45; pointer-events: none; }
+
 @media (max-width: 720px) {
   .detail-grid { grid-template-columns: 1fr; }
 }

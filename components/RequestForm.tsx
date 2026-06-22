@@ -1,9 +1,10 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Plus, Send, Trash2 } from "lucide-react";
-import { createRemittanceRequest } from "@/lib/actions";
-import { SubmitButton } from "@/components/SubmitButton";
+import { createRemittanceRequest, updateRemittanceRequest } from "@/lib/actions";
+import { createClient } from "@/lib/supabase/client";
 import type { ForeignDepositAccount, ForeignDepositLot, FxReservation, Payee, SettlementMethod } from "@/lib/db";
 import { formatAmount, formatRate, remaining, toNumber } from "@/lib/db";
 
@@ -33,6 +34,17 @@ type AllocationRow = {
   depositId: string;
   depositLotId: string;
   paymentRate: string;
+};
+
+export type RequestInitial = {
+  requestId: string;
+  remittanceDate: string;
+  payeeId: string;
+  amount: string;
+  currency: string;
+  memo: string;
+  beneficiary: Beneficiary;
+  allocations: AllocationRow[];
 };
 
 function beneficiaryFromPayee(payee?: Payee): Beneficiary {
@@ -71,20 +83,31 @@ export function RequestForm({
   deposits,
   lots,
   payees,
-  reservations
+  reservations,
+  userId,
+  mode = "create",
+  initial
 }: {
   deposits: ForeignDepositAccount[];
   lots: ForeignDepositLot[];
   payees: Payee[];
   reservations: FxReservation[];
+  userId: string;
+  mode?: "create" | "edit";
+  initial?: RequestInitial;
 }) {
-  const [payeeId, setPayeeId] = useState(payees[0]?.id ?? "");
-  const [currency, setCurrency] = useState(payees[0]?.default_currency ?? "EUR");
-  const [amount, setAmount] = useState("");
-  const [allocations, setAllocations] = useState<AllocationRow[]>([newAllocation()]);
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [statusText, setStatusText] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const [payeeId, setPayeeId] = useState(initial?.payeeId ?? payees[0]?.id ?? "");
+  const [currency, setCurrency] = useState(initial?.currency ?? payees[0]?.default_currency ?? "EUR");
+  const [amount, setAmount] = useState(initial?.amount ?? "");
+  const [allocations, setAllocations] = useState<AllocationRow[]>(initial?.allocations ?? [newAllocation()]);
   const [formError, setFormError] = useState("");
   const payee = useMemo(() => payees.find((item) => item.id === payeeId) ?? payees[0], [payeeId, payees]);
-  const [beneficiary, setBeneficiary] = useState<Beneficiary>(beneficiaryFromPayee(payee));
+  const [beneficiary, setBeneficiary] = useState<Beneficiary>(initial?.beneficiary ?? beneficiaryFromPayee(payee));
 
   const filteredReservations = reservations.filter((reservation) => reservation.currency === currency);
   const filteredDeposits = deposits.filter((deposit) => deposit.currency === currency);
@@ -116,26 +139,62 @@ export function RequestForm({
     setAllocations((current) => current.length === 1 ? current : current.filter((allocation) => allocation.id !== id));
   }
 
-  function validateSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     if (!totalMatches) {
-      event.preventDefault();
       setFormError("決済明細の合計金額が支払金額と一致していません。");
       return;
     }
     setFormError("");
+    const formEl = event.currentTarget;
+
+    startTransition(async () => {
+      const formData = new FormData(formEl);
+      try {
+        const files = fileRef.current?.files ? Array.from(fileRef.current.files) : [];
+        if (files.length > 0) {
+          setStatusText("添付をアップロード中...");
+          const supabase = createClient();
+          for (const file of files) {
+            const path = `${userId}/${crypto.randomUUID()}-${file.name}`;
+            const { error } = await supabase.storage
+              .from("remittance-files")
+              .upload(path, file, { contentType: file.type || "application/pdf", upsert: false });
+            if (error) {
+              throw new Error(`添付のアップロードに失敗しました: ${error.message}`);
+            }
+            formData.append("attachment_name", file.name);
+            formData.append("attachment_path", path);
+          }
+        }
+        setStatusText(mode === "edit" ? "再申請を保存中..." : "申請を登録中...");
+      } catch (error) {
+        setFormError(error instanceof Error ? error.message : "送信に失敗しました。");
+        setStatusText("");
+        return;
+      }
+
+      if (mode === "edit" && initial?.requestId) {
+        formData.set("request_id", initial.requestId);
+        await updateRemittanceRequest(formData);
+      } else {
+        await createRemittanceRequest(formData);
+      }
+      router.refresh();
+    });
   }
 
   return (
-    <form action={createRemittanceRequest} className="panel request-document" onSubmit={validateSubmit}>
+    <form className="panel request-document" onSubmit={handleSubmit}>
       <div className="document-title">
         <h2>海外送金依頼書</h2>
-        <span>システム申請</span>
+        <span>{mode === "edit" ? "差戻しの再申請" : "システム申請"}</span>
       </div>
 
       <section className="document-section">
         <h3>1. 支払内容</h3>
         <div className="form-grid">
-          <label>送金日<input name="remittance_date" required type="date" /></label>
+          <label>送金日<input name="remittance_date" required type="date" defaultValue={initial?.remittanceDate} /></label>
           <label>
             受取人
             <select name="payee_id" onChange={(event) => changePayee(event.target.value)} value={payeeId}>
@@ -148,7 +207,7 @@ export function RequestForm({
             <select name="currency" onChange={(event) => setCurrency(event.target.value)} value={currency}>
               <option>EUR</option>
               <option>USD</option>
-              <option>GBP</option>
+              <option>JPY</option>
             </select>
           </label>
           <label>支払金額<input min="1" name="amount" onChange={(event) => setAmount(event.target.value)} required type="number" value={amount} /></label>
@@ -299,21 +358,18 @@ export function RequestForm({
 
       <section className="document-section">
         <h3>5. 添付・備考</h3>
-        <label className="memo">添付PDF<input accept="application/pdf" multiple name="attachments" type="file" /></label>
-        <label className="memo">備考<textarea name="memo" /></label>
+        <label className="memo">添付PDF<input ref={fileRef} accept="application/pdf" multiple type="file" /></label>
+        {mode === "edit" ? <p className="save-note">既存の添付はそのまま残ります。ここで追加したファイルのみ追加登録されます。</p> : null}
+        <label className="memo">備考<textarea name="memo" defaultValue={initial?.memo} /></label>
       </section>
 
       {formError ? <p className="form-alert bottom-alert">{formError}</p> : null}
 
       <div className="actions document-actions">
-        <SubmitButton
-          className="primary"
-          icon={<Send size={18} />}
-          notice="申請と添付PDFを保存しています。完了後に履歴へ移動します。"
-          pendingLabel="申請登録中..."
-        >
-          申請登録
-        </SubmitButton>
+        <button className={`primary ${pending ? "is-pending" : ""}`} disabled={pending} type="submit">
+          {pending ? <span className="spinner" aria-hidden="true" /> : <Send size={18} />}
+          {pending ? (statusText || "処理中...") : mode === "edit" ? "再申請する" : "申請登録"}
+        </button>
       </div>
     </form>
   );
