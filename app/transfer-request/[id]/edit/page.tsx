@@ -84,7 +84,6 @@ export default async function EditRequestPage({ params }: { params: Promise<{ id
         lots={lots}
         payees={payees}
         reservations={reservations}
-        userId={profile.id}
         mode="edit"
         initial={initial}
       />

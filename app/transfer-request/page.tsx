@@ -113,7 +113,7 @@ export default async function TransferRequestPage() {
 
   return (
     <AppShell title="送金申請" description="申請フォームのみを表示します。登録後は履歴ページで確認できます。" role={profile.role}>
-      <RequestForm deposits={deposits} lots={lots} payees={payees} reservations={reservations} userId={data.user.id} />
+      <RequestForm deposits={deposits} lots={lots} payees={payees} reservations={reservations} />
     </AppShell>
   );
 }

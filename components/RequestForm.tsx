@@ -1,10 +1,9 @@
 "use client";
 
-import { FormEvent, useMemo, useRef, useState, useTransition } from "react";
+import { FormEvent, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Send, Trash2 } from "lucide-react";
 import { createRemittanceRequest, updateRemittanceRequest } from "@/lib/actions";
-import { createClient } from "@/lib/supabase/client";
 import type { ForeignDepositAccount, ForeignDepositLot, FxReservation, Payee, SettlementMethod } from "@/lib/db";
 import { formatAmount, formatRate, remaining, toNumber } from "@/lib/db";
 
@@ -84,7 +83,6 @@ export function RequestForm({
   lots,
   payees,
   reservations,
-  userId,
   mode = "create",
   initial
 }: {
@@ -92,14 +90,12 @@ export function RequestForm({
   lots: ForeignDepositLot[];
   payees: Payee[];
   reservations: FxReservation[];
-  userId: string;
   mode?: "create" | "edit";
   initial?: RequestInitial;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [statusText, setStatusText] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const [payeeId, setPayeeId] = useState(initial?.payeeId ?? payees[0]?.id ?? "");
   const [currency, setCurrency] = useState(initial?.currency ?? payees[0]?.default_currency ?? "EUR");
@@ -114,6 +110,7 @@ export function RequestForm({
   const filteredLots = lots.filter((lot) => lot.currency === currency && toNumber(lot.remaining_amount) > 0);
   const allocationTotal = allocations.reduce((sum, allocation) => sum + toNumber(allocation.amount), 0);
   const amountNumber = toNumber(amount);
+  const amountStep = currency === "JPY" ? "1" : "0.01";
   const totalMatches = amountNumber > 0 && Math.abs(allocationTotal - amountNumber) <= 0.01;
 
   function changePayee(nextId: string) {
@@ -149,31 +146,8 @@ export function RequestForm({
     const formEl = event.currentTarget;
 
     startTransition(async () => {
+      setStatusText(mode === "edit" ? "再申請を保存中..." : "申請を登録中...");
       const formData = new FormData(formEl);
-      try {
-        const files = fileRef.current?.files ? Array.from(fileRef.current.files) : [];
-        if (files.length > 0) {
-          setStatusText("添付をアップロード中...");
-          const supabase = createClient();
-          for (const file of files) {
-            const path = `${userId}/${crypto.randomUUID()}-${file.name}`;
-            const { error } = await supabase.storage
-              .from("remittance-files")
-              .upload(path, file, { contentType: file.type || "application/pdf", upsert: false });
-            if (error) {
-              throw new Error(`添付のアップロードに失敗しました: ${error.message}`);
-            }
-            formData.append("attachment_name", file.name);
-            formData.append("attachment_path", path);
-          }
-        }
-        setStatusText(mode === "edit" ? "再申請を保存中..." : "申請を登録中...");
-      } catch (error) {
-        setFormError(error instanceof Error ? error.message : "送信に失敗しました。");
-        setStatusText("");
-        return;
-      }
-
       if (mode === "edit" && initial?.requestId) {
         formData.set("request_id", initial.requestId);
         await updateRemittanceRequest(formData);
@@ -210,7 +184,7 @@ export function RequestForm({
               <option>JPY</option>
             </select>
           </label>
-          <label>支払金額<input min="1" name="amount" onChange={(event) => setAmount(event.target.value)} required type="number" value={amount} /></label>
+          <label>支払金額<input min="1" name="amount" onChange={(event) => setAmount(event.target.value)} required step={amountStep} type="number" value={amount} /></label>
           <div className={`total-check ${totalMatches ? "ok" : ""}`}>
             <span>決済明細合計</span>
             <strong>{amountNumber > 0 ? formatAmount(allocationTotal, currency) : "-"}</strong>
@@ -247,7 +221,7 @@ export function RequestForm({
                     <option>外貨預金</option>
                   </select>
                 </label>
-                <label>金額<input min="0" name="allocation_amount" onChange={(event) => updateAllocation(allocation.id, { amount: event.target.value })} required type="number" value={allocation.amount} /></label>
+                <label>金額<input min="0" name="allocation_amount" onChange={(event) => updateAllocation(allocation.id, { amount: event.target.value })} required step={amountStep} type="number" value={allocation.amount} /></label>
 
                 {allocation.method === "為替予約" ? (
                   <label className="wide-field">
@@ -358,7 +332,7 @@ export function RequestForm({
 
       <section className="document-section">
         <h3>5. 添付・備考</h3>
-        <label className="memo">添付PDF<input ref={fileRef} accept="application/pdf" multiple type="file" /></label>
+        <label className="memo">添付PDF<input accept="application/pdf" multiple name="attachments" type="file" /></label>
         {mode === "edit" ? <p className="save-note">既存の添付はそのまま残ります。ここで追加したファイルのみ追加登録されます。</p> : null}
         <label className="memo">備考<textarea name="memo" defaultValue={initial?.memo} /></label>
       </section>

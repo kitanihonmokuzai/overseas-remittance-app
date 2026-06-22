@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -73,21 +74,34 @@ async function operatorEmails(supabase: Awaited<ReturnType<typeof createClient>>
   return (data ?? []).map((row) => row.email as string).filter(Boolean);
 }
 
-async function insertAttachmentRows(
+async function uploadAttachments(
   supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
   requestId: string,
   formData: FormData
 ) {
-  const names = formData.getAll("attachment_name").map((item) => String(item));
-  const paths = formData.getAll("attachment_path").map((item) => String(item));
-  for (let i = 0; i < paths.length; i += 1) {
-    if (!paths[i]) continue;
-    const { error } = await supabase.from("remittance_files").insert({
+  const files = formData
+    .getAll("attachments")
+    .filter((item): item is File => item instanceof File && item.size > 0);
+
+  for (const file of files) {
+    // ストレージのキーにはファイル名を使わず（日本語・空白・記号で失敗するため）、
+    // ランダムID＋拡張子のみにする。元のファイル名は file_name に保持する。
+    const dot = file.name.lastIndexOf(".");
+    const ext = dot >= 0 ? file.name.slice(dot + 1).toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+    const storagePath = `${userId}/${requestId}/${randomUUID()}${ext ? `.${ext}` : ""}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("remittance-files")
+      .upload(storagePath, file, { contentType: file.type || "application/pdf", upsert: false });
+    throwIfError(uploadError);
+
+    const { error: fileError } = await supabase.from("remittance_files").insert({
       request_id: requestId,
-      file_name: names[i] || "添付ファイル",
-      storage_path: paths[i]
+      file_name: file.name,
+      storage_path: storagePath
     });
-    throwIfError(error);
+    throwIfError(fileError);
   }
 }
 
@@ -310,7 +324,7 @@ export async function createRemittanceRequest(formData: FormData) {
 
   // 添付はクライアントから Storage へ直接アップロード済み。ここではメタdata のみ登録する
   // （Vercel の Server Action 本文サイズ上限を回避）。
-  await insertAttachmentRows(supabase, requestId, formData);
+  await uploadAttachments(supabase, user.id, requestId, formData);
 
   await logAudit(supabase, { requestId, action: "申請", actorId: user.id, actorEmail: user.email ?? "" });
 
@@ -386,7 +400,7 @@ export async function updateRemittanceRequest(formData: FormData) {
   }
 
   // 4) 追加の添付（あれば）
-  await insertAttachmentRows(supabase, requestId, formData);
+  await uploadAttachments(supabase, user.id, requestId, formData);
 
   await logAudit(supabase, { requestId, action: "再申請", actorId: user.id, actorEmail: user.email ?? "" });
 
