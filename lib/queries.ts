@@ -40,6 +40,13 @@ export async function getPayees() {
   return (data ?? []) as Payee[];
 }
 
+export async function getPayeeById(id: string) {
+  const supabase = await authenticatedClient();
+  const { data, error } = await supabase.from("payees").select("*").eq("id", id).maybeSingle();
+  throwIfError(error);
+  return (data ?? null) as Payee | null;
+}
+
 export async function getCurrentProfile() {
   const supabase = await createClient();
   const { data: authData, error: authError } = await supabase.auth.getUser();

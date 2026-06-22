@@ -313,17 +313,6 @@ export async function createRemittanceRequest(formData: FormData) {
   );
   throwIfError(allocationError);
 
-  for (const allocation of allocations.filter((item) => item.method === "為替予約" && item.reservation_id)) {
-    const { error } = await supabase.from("remittance_fx_allocations").insert({
-      request_id: requestId,
-      reservation_id: allocation.reservation_id,
-      amount: allocation.amount
-    });
-    throwIfError(error);
-  }
-
-  // 添付はクライアントから Storage へ直接アップロード済み。ここではメタdata のみ登録する
-  // （Vercel の Server Action 本文サイズ上限を回避）。
   await uploadAttachments(supabase, user.id, requestId, formData);
 
   await logAudit(supabase, { requestId, action: "申請", actorId: user.id, actorEmail: user.email ?? "" });
@@ -419,6 +408,7 @@ export async function createFxReservation(formData: FormData) {
   const originalAmount = numberValue(formData, "original_amount");
   const rate = numberValue(formData, "rate");
   const period = value(formData, "period");
+  const deadline = value(formData, "deadline");
 
   if (!reservationNo || !bank || !currency || !bookedDate || originalAmount <= 0 || rate <= 0) {
     throw new Error("必須項目が不足しています。");
@@ -434,7 +424,8 @@ export async function createFxReservation(formData: FormData) {
       original_amount: originalAmount,
       used_amount: 0,
       rate,
-      period
+      period,
+      deadline: deadline || null
     })
     .select("id")
     .single();
@@ -606,6 +597,30 @@ export async function rejectRequest(formData: FormData) {
 
   await logAudit(supabase, { requestId, action: "差戻し", actorId: user.id, actorEmail: user.email ?? "", note: reason });
 
+  // 申請者へ差戻し通知
+  const { data: rejected } = await supabase
+    .from("remittance_requests")
+    .select("created_by, payee_name, amount, currency")
+    .eq("id", requestId)
+    .maybeSingle();
+  if (rejected?.created_by) {
+    const { data: creator } = await supabase
+      .from("profiles")
+      .select("email")
+      .eq("id", rejected.created_by)
+      .maybeSingle();
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+    await notify({
+      to: creator?.email ? [creator.email] : [],
+      subject: `【海外送金】差戻し ${rejected.payee_name ?? ""}`,
+      body:
+        `送金申請が差戻しされました。内容を修正して再申請してください。\n\n` +
+        `受取人: ${rejected.payee_name ?? ""}\n金額: ${rejected.currency ?? ""} ${Number(rejected.amount ?? 0).toLocaleString("ja-JP")}\n` +
+        `差戻し理由: ${reason}\n` +
+        (appUrl ? `\n履歴・再申請はこちら: ${appUrl}/history` : "")
+    });
+  }
+
   revalidatePath("/approvals");
   revalidatePath("/history");
 }
@@ -622,6 +637,47 @@ export async function deleteRemittanceRequest(formData: FormData) {
   const { error } = await supabase.from("remittance_requests").delete().eq("id", requestId);
   throwIfError(error);
   revalidatePath("/history");
+}
+
+export async function savePayee(formData: FormData) {
+  const { supabase, user } = await authenticatedClient();
+  await requireOperator(supabase, user.id);
+
+  const id = value(formData, "id");
+  const record = {
+    name: value(formData, "name"),
+    default_currency: value(formData, "default_currency") || "USD",
+    bank_name: value(formData, "bank_name"),
+    branch_name: value(formData, "branch_name"),
+    account_no: value(formData, "account_no"),
+    account_name: value(formData, "account_name"),
+    swift: value(formData, "swift"),
+    country: value(formData, "country"),
+    address: value(formData, "address"),
+    bank_country: value(formData, "bank_country"),
+    bank_city: value(formData, "bank_city"),
+    bank_street: value(formData, "bank_street"),
+    bank_postal: value(formData, "bank_postal"),
+    origin: value(formData, "origin"),
+    shipping_country: value(formData, "shipping_country"),
+    shipping_city: value(formData, "shipping_city"),
+    charge_bearer: value(formData, "charge_bearer")
+  };
+  if (!record.name) {
+    throw new Error("登録名称を入力してください。");
+  }
+
+  if (id) {
+    const { error } = await supabase.from("payees").update(record).eq("id", id);
+    throwIfError(error);
+  } else {
+    const { error } = await supabase.from("payees").insert(record);
+    throwIfError(error);
+  }
+
+  revalidatePath("/payees");
+  revalidatePath("/transfer-request");
+  redirect("/payees");
 }
 
 export async function updateUserRole(formData: FormData) {

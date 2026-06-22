@@ -848,6 +848,17 @@ td { font-size: 13.5px; }
   font-size: 12.5px;
 }
 
+/* 数値入力の上下スピナーを非表示にする */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -887,6 +898,8 @@ td { font-size: 13.5px; }
 .stat-card b small { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 4px; }
 .stat-card b.gain { color: var(--gain); }
 .stat-card b.loss { color: var(--loss); }
+
+.alert-panel { border-left: 3px solid var(--brass, #b8893a); }
 
 .export-body { display: grid; gap: 10px; padding: 18px; }
 

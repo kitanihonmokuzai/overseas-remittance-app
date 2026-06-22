@@ -10,7 +10,8 @@ const baseItems = [
   { href: "/approvals", label: "承認・支払", operatorOnly: true },
   { href: "/fx-reservations", label: "為替予約" },
   { href: "/foreign-deposits", label: "外貨預金" },
-  { href: "/history", label: "履歴" }
+  { href: "/history", label: "履歴" },
+  { href: "/payees", label: "受取人マスタ", operatorOnly: true }
 ];
 
 export function NavLinks({ role, pendingCount = 0 }: { role?: UserRole; pendingCount?: number }) {

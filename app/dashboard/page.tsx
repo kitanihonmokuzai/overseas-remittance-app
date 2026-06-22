@@ -46,6 +46,16 @@ export default async function DashboardPage() {
     );
   });
 
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const expiringReservations = reservations
+    .filter((reservation) => reservation.deadline && remaining(reservation) > 0)
+    .map((reservation) => {
+      const days = Math.ceil((new Date(reservation.deadline as string).getTime() - startOfToday.getTime()) / 86400000);
+      return { reservation, days };
+    })
+    .filter((item) => item.days <= 14)
+    .sort((a, b) => a.days - b.days);
+
   return (
     <AppShell title="ダッシュボード" description="承認状況・外貨残高・為替予約・当月の為替差損益を一画面で確認できます。" role={profile.role}>
       <section className="stat-grid">
@@ -66,6 +76,35 @@ export default async function DashboardPage() {
           <b>{deposits.length}<small>口座</small></b>
         </div>
       </section>
+
+      {expiringReservations.length > 0 ? (
+        <section className="panel alert-panel">
+          <div className="panel-head"><h2>為替予約 期限アラート</h2><span>残額があり期日が近い予約</span></div>
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>状態</th><th>予約番号</th><th>銀行</th><th>通貨</th><th>残額</th><th>期日</th></tr></thead>
+              <tbody>
+                {expiringReservations.map(({ reservation, days }) => (
+                  <tr key={reservation.id}>
+                    <td>
+                      {days < 0
+                        ? <span className="status reject">期限切れ</span>
+                        : days === 0
+                          ? <span className="status reject">本日期限</span>
+                          : <span className="status pay">あと{days}日</span>}
+                    </td>
+                    <td>{reservation.reservation_no}</td>
+                    <td>{reservation.bank}</td>
+                    <td>{reservation.currency}</td>
+                    <td>{formatAmount(remaining(reservation), reservation.currency)}</td>
+                    <td>{formatDate(reservation.deadline as string)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
 
       <section className="panel">
         <div className="panel-head"><h2>外貨預金残高</h2><span>通貨別合計あり</span></div>

@@ -29,6 +29,7 @@ export type FxReservation = {
   used_amount: string | number;
   rate: string | number;
   period: string;
+  deadline?: string | null;
 };
 
 export type ForeignDepositAccount = {

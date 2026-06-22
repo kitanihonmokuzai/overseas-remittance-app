@@ -24,6 +24,7 @@ export default async function NewFxReservationPage() {
           <label>予約額<input min="1" name="original_amount" required type="number" /></label>
           <label>レート<input min="0" name="rate" required step="0.01" type="number" /></label>
           <label className="full">期間<input name="period" placeholder="2026/6/1-2026/8/31" /></label>
+          <label>期日<input name="deadline" type="date" /></label>
         </div>
         <div className="actions">
           <SubmitButton

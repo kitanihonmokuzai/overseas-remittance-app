@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { NumberInputGuard } from "@/components/NumberInputGuard";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -23,7 +24,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;600&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap"
         />
       </head>
-      <body>{children}</body>
+      <body><NumberInputGuard />{children}</body>
     </html>
   );
 }
